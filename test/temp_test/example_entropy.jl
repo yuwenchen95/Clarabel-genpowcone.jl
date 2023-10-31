@@ -2,11 +2,11 @@ using LinearAlgebra, SparseArrays
 using JuMP,Mosek,MosekTools,ECOS
 # using JLD,JLD2
 # include(".\\..\\src\\Clarabel.jl")
-using Clarabel
+# using Clarabel
 # using Hypatia
 using BenchmarkTools
 
-d = 50
+d = 5000
 dim = 2*d+1
 p_init = rand(d)
 # p_init = ones(d)
@@ -54,7 +54,7 @@ model = Model(Clarabel.Optimizer)
 @objective(model, Min, t)
 @constraint(model, sum(q) == 1)
 @constraint(model, p .== p_init)
-@constraint(model, vcat(t,p,q) in Clarabel.EntropyConeT(dim))
+@constraint(model, vcat(t,p,q) in Clarabel.MOI.EntropyCone(dim))
 optimize!(model)
 @assert isapprox(opt_val,objective_value(model),atol = tol)
 
@@ -77,19 +77,19 @@ end
 optimize!(model)
 @assert isapprox(opt_val,objective_value(model),atol = tol)
 
-#Result from Hypatia
-using Hypatia
-println("entropy cones via Hypatia")
-model = Model(Hypatia.Optimizer)
-@variable(model, p[1:d])
-@variable(model, q[1:d])
-@variable(model, t)
-@objective(model, Min, t)
-@constraint(model, sum(q) == 1)
-@constraint(model, p .== p_init)
-@constraint(model, vcat(t,p,q) in Hypatia.EpiRelEntropyCone{Float64}(dim))
-optimize!(model)
-@assert isapprox(opt_val,objective_value(model),atol = tol)
+# #Result from Hypatia
+# using Hypatia
+# println("entropy cones via Hypatia")
+# model = Model(Hypatia.Optimizer)
+# @variable(model, p[1:d])
+# @variable(model, q[1:d])
+# @variable(model, t)
+# @objective(model, Min, t)
+# @constraint(model, sum(q) == 1)
+# @constraint(model, p .== p_init)
+# @constraint(model, vcat(t,p,q) in Hypatia.EpiRelEntropyCone{Float64}(dim))
+# optimize!(model)
+# @assert isapprox(opt_val,objective_value(model),atol = tol)
 
 # # ############################################################
 # # # Another example from signomial and polynomial Optimization, 

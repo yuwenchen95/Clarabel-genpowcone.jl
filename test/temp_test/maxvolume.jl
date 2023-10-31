@@ -12,7 +12,7 @@ Maximum volume hypercube} from Hypatia.jl,
 https://github.com/chriscoey/Hypatia.jl/tree/master/examples/maxvolume,
 """
 
-n = 500
+n = 50000
 # ensure there will be a feasible solution
 x = randn(n)
 # A = sparse(Symmetric(sprand(n,n,1.0/n)) + 10I)
@@ -45,7 +45,7 @@ for i = 1:n-2
 end
 @constraint(model, vcat(gamma, A * p) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * p) in MOI.NormOneCone(n + 1))
-MOI.set(model, MOI.Silent(), true)
+# MOI.set(model, MOI.Silent(), true)
 optimize!(model)
 opt_val = objective_value(model)
 
@@ -65,7 +65,7 @@ end
 # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
 @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
-MOI.set(model, MOI.Silent(), true)      #Diable printing information
+# MOI.set(model, MOI.Silent(), true)      #Disable printing information
 optimize!(model)
 @assert isapprox(opt_val,objective_value(model),atol = tol)
 
@@ -75,24 +75,24 @@ model = Model(Clarabel.Optimizer)
 @variable(model, t)
 @variable(model, x[1:n])
 @objective(model, Max, t)
-@constraint(model, vcat(x,t) in Clarabel.GenPowerConeT(freq,n,1))
+@constraint(model, vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
 # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
 @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
-MOI.set(model, MOI.Silent(), true)      #Diable printing information
+# MOI.set(model, MOI.Silent(), true)      #Disable printing information
 optimize!(model)
 @assert isapprox(opt_val,objective_value(model),atol = tol)
 
-#Result from Hypatia
-println("generalized power cones via Hypatia")
-model = Model(Hypatia.Optimizer)
-@variable(model, t)
-@variable(model, x[1:n])
-@objective(model, Max, t)
-@constraint(model, vcat(x,t) in Hypatia.GeneralizedPowerCone(freq,1,false))
-# @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
-@constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
-@constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
-MOI.set(model, MOI.Silent(), true)
-optimize!(model)
-@assert isapprox(opt_val,objective_value(model),atol = tol)
+# #Result from Hypatia
+# println("generalized power cones via Hypatia")
+# model = Model(Hypatia.Optimizer)
+# @variable(model, t)
+# @variable(model, x[1:n])
+# @objective(model, Max, t)
+# @constraint(model, vcat(x,t) in Hypatia.GeneralizedPowerCone(freq,1,false))
+# # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
+# @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
+# @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
+# # MOI.set(model, MOI.Silent(), true)
+# optimize!(model)
+# @assert isapprox(opt_val,objective_value(model),atol = tol)

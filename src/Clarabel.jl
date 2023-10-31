@@ -1,12 +1,10 @@
 __precompile__()
 module Clarabel
 
-    using SparseArrays, LinearAlgebra, Printf, MathOptInterface, Requires
+    using SparseArrays, LinearAlgebra, Printf, Requires
     const DefaultFloat = Float64
     const DefaultInt   = LinearAlgebra.BlasInt
     const IdentityMatrix = UniformScaling{Bool}
-    const MOI = MathOptInterface
-    const MOIU = MOI.Utilities
 
     #internal constraint RHS limits.  This let block 
     #hides the INFINITY field in the module and makes 
@@ -27,6 +25,7 @@ module Clarabel
 
     #cone type definitions
     include("./cones/cone_types.jl")
+    include("./cones/cone_dispatch.jl")
     include("./cones/compositecone_type.jl")
 
     #core solver components
@@ -66,7 +65,7 @@ module Clarabel
     include("./cones/coneops_powmeancone.jl")       #Power mean cone
     include("./cones/coneops_entropycone.jl")       #Relative entropy cone
     include("./cones/coneops_compositecone.jl")
-    include("./cones/coneops_exppow_common.jl")
+    include("./cones/coneops_nonsymmetric_common.jl")
     include("./cones/coneops_symmetric_common.jl")
 
     #various algebraic utilities
@@ -85,10 +84,13 @@ module Clarabel
     end
 
     #MathOptInterface for JuMP/Convex.jl
-    module MOImodule
+    module MOI  #extensions providing non-standard MOI constraint types
+        include("./MOI_wrapper/MOI_extensions.jl")
+    end
+    module MOIwrapper #our actual MOI interface
          include("./MOI_wrapper/MOI_wrapper.jl")
     end
-    const Optimizer{T} = Clarabel.MOImodule.Optimizer{T}
+    const Optimizer{T} = Clarabel.MOIwrapper.Optimizer{T}
 
 
     #precompile minimal MOI / native examples

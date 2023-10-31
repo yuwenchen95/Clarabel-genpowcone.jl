@@ -28,8 +28,8 @@ function basic_powm_data(Type::Type{T}) where {T <: AbstractFloat}
     α12 = T.([0.6;0.4])
     dim1 = 2
     dim2 = 1
-    push!(cones,Clarabel.PowerMeanConeT(α11,dim1))    
-    push!(cones,Clarabel.PowerMeanConeT(α12,dim1))    
+    push!(cones,Clarabel.MOI.PowerMeanCone(α11))    
+    push!(cones,Clarabel.MOI.PowerMeanCone(α12))    
     
     # u1 + 3x1 == 3
     A2 = T[-1.0 0 0 -3.0 0 0]
@@ -71,8 +71,8 @@ model = Model(Clarabel.Optimizer)
 @constraint(model, c2, x[4:6] in MOI.PowerCone(0.6))
 @constraint(model, c11, x[3] >= 0)
 @constraint(model, c12, x[6] >= 0)
-# @constraint(model, c1, b1[1:3]-A1[1:3,:]*x in Clarabel.PowerMeanConeT([0.3,0.7],2))
-# @constraint(model, c2, b1[4:6]-A1[4:6,:]*x in Clarabel.PowerMeanConeT([0.6,0.4],2))
+# @constraint(model, c1, b1[1:3]-A1[1:3,:]*x in Clarabel.MOI.PowerMeanCone([0.3,0.7]))
+# @constraint(model, c2, b1[4:6]-A1[4:6,:]*x in Clarabel.MOI.PowerMeanCone([0.6,0.4]))
 # @constraint(model, c3, b2-A2*x .== 0.)
 @constraint(model, c4, b3-A3*x .>= 0.)
 # @constraint(model, c5, b4-A4*x in MOI.SecondOrderCone(3))

@@ -25,38 +25,27 @@ struct CompositeCone{T} <: AbstractCone{T}
     function CompositeCone{T}(cone_specs::Vector{SupportedCone}) where {T}
 
         ncones = length(cone_specs)
-        cones  = Vector{AbstractCone{T}}(undef,ncones)
+        cones  = AbstractCone{T}[]
+        sizehint!(cones,ncones)
 
-        #count the number of each cone type
         type_counts = Dict{Type,Int}()
-        for (key, val) in ConeDict
-            type_counts[val] = count(C->isa(C,key), cone_specs)
-        end
 
         #assumed symmetric to start
         _is_symmetric = true
 
         #create cones with the given dims
-        for (i, coneT) in enumerate(cone_specs)
-            typeT = typeof(coneT)
-            if typeT == ExponentialConeT
-                cones[i] = ConeDict[typeT]{T}()
-                _is_symmetric = false
-            elseif typeT == PowerConeT
-                cones[i] = ConeDict[typeT]{T}(T(cone_specs[i].α))
-                _is_symmetric = false
-            elseif typeT == GenPowerConeT
-                cones[i] = ConeDict[typeof(cone_specs[i])]{T}(T.(cone_specs[i].α),cone_specs[i].dim1,cone_specs[i].dim2)
-                _is_symmetric = false
-            elseif typeT == PowerMeanConeT
-                cones[i] = ConeDict[typeof(cone_specs[i])]{T}(T.(cone_specs[i].α),cone_specs[i].d)
-                _is_symmetric = false
-            elseif typeT == EntropyConeT
-                cones[i] = ConeDict[typeof(cone_specs[i])]{T}(cone_specs[i].dim)
-                _is_symmetric = false
-            else
-                cones[i] = ConeDict[typeT]{T}(cone_specs[i].dim)
-            end
+        for coneT in cone_specs
+            #make a new cone
+            cone = make_cone(T, coneT);
+
+            #update global problem symmetry
+            _is_symmetric = _is_symmetric && is_symmetric(cone)
+
+            #increment type counts 
+            key = ConeDict[typeof(coneT)]
+            haskey(type_counts,key) ? type_counts[key] += 1 : type_counts[key] = 1
+            
+            push!(cones,cone)
         end
 
         #count up elements and degree
@@ -88,6 +77,13 @@ Base.length(S::CompositeCone{T}) where{T} = length(S.cones)
 Base.eachindex(S::CompositeCone{T}) where{T} = eachindex(S.cones)
 Base.IndexStyle(S::CompositeCone{T}) where{T} = IndexStyle(S.cones)
 
+function get_type_count(cones::CompositeCone{T}, type::Type) where {T}
+    if haskey(cones.type_counts,type)
+        return cones.type_counts[type]
+    else
+        return 0
+    end
+end
 
 function _make_headidx!(headidx,cones)
 

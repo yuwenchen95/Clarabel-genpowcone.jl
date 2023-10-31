@@ -15,18 +15,15 @@ const OptimizerSupportedMOICones{T} = Union{
     MOI.Zeros,
     MOI.Nonnegatives,
     MOI.SecondOrderCone,
-    MOI.ScaledPositiveSemidefiniteConeTriangle,
+    MOI.Scaled{MOI.PositiveSemidefiniteConeTriangle},
     MOI.ExponentialCone,
     MOI.PowerCone{T},
-    Clarabel.GenPowerConeT,
-    Clarabel.PowerMeanConeT,
-    Clarabel.EntropyConeT,
+    Clarabel.MOI.GenPowerCone{T},
+    Clarabel.MOI.PowerMeanCone{T},
+    Clarabel.MOI.EntropyCone{T}
 } where {T}
 
-Base.copy(cone::OptimizerSupportedMOICones) = cone 
-
 #Optimizer will consolidate cones of these types if possible
-
 const OptimizerMergeableTypes = [Clarabel.ZeroConeT, Clarabel.NonnegativeConeT]
 
 #mappings between MOI and internal definitions
@@ -35,9 +32,12 @@ const MOItoClarabelCones = Dict([
     MOI.Zeros           => Clarabel.ZeroConeT,
     MOI.Nonnegatives    => Clarabel.NonnegativeConeT,
     MOI.SecondOrderCone => Clarabel.SecondOrderConeT,
-    MOI.ScaledPositiveSemidefiniteConeTriangle => Clarabel.PSDTriangleConeT,
     MOI.ExponentialCone => Clarabel.ExponentialConeT,
     MOI.PowerCone       => Clarabel.PowerConeT,
+    Clarabel.MOI.GenPowerCone => Clarabel.GenPowerConeT,
+    Clarabel.MOI.PowerMeanCone => Clarabel.PowerMeanConeT,
+    Clarabel.MOI.EntropyCone => Clarabel.EntropyConeT,
+    MOI.Scaled{MOI.PositiveSemidefiniteConeTriangle} => Clarabel.PSDTriangleConeT,
 ])
 
 # PJG: PrimalStatus/DualStatus just reported as "NEARLY_FEASIBLE"
@@ -635,17 +635,21 @@ function push_constraint_set!(
         return nothing
     end
 
-    # handle self-defined GenPowerCone & Relative Entropy cone & Power mean cone
-    if isa(s,Clarabel.GenPowerConeT)
-        push!(cone_spec, Clarabel.GenPowerConeT(s.α,s.dim1,s.dim2))
+
+    # handle GenPowerCone (takes two parameters)
+    if isa(s,Clarabel.MOI.GenPowerCone)
+        genpow_cone_type = MOItoClarabelCones[Clarabel.MOI.GenPowerCone]
+        push!(cone_spec, genpow_cone_type(s.α,s.dim2))
         return nothing
     end
-    if isa(s,Clarabel.PowerMeanConeT)
-        push!(cone_spec, Clarabel.PowerMeanConeT(s.α,s.d))
+    if isa(s,Clarabel.MOI.PowerMeanCone)
+        genpow_cone_type = MOItoClarabelCones[Clarabel.MOI.PowerMeanCone]
+        push!(cone_spec, genpow_cone_type(s.α))
         return nothing
     end
-    if isa(s,Clarabel.EntropyConeT)
-        push!(cone_spec, Clarabel.EntropyConeT(s.dim))
+    if isa(s,Clarabel.MOI.EntropyCone)
+        genpow_cone_type = MOItoClarabelCones[Clarabel.MOI.EntropyCone]
+        push!(cone_spec, genpow_cone_type(s.dim))
         return nothing
     end
 
@@ -671,7 +675,7 @@ end
 # For matrices, this is just the matrix side dimension.  Conversion differs
 # for square vs triangular form
 _to_optimizer_conedim(set::MOI.AbstractVectorSet) = MOI.dimension(set)
-_to_optimizer_conedim(set::MOI.ScaledPositiveSemidefiniteConeTriangle) = set.side_dimension
+_to_optimizer_conedim(set::MOI.Scaled{MOI.PositiveSemidefiniteConeTriangle}) = MOI.side_dimension(set)
 
 function push_constraint_set!(
     cone_spec::Vector{Clarabel.SupportedCone},

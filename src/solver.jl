@@ -194,12 +194,7 @@ function solve!(
         # ----------
 
         # Scaling strategy
-        # YC: For generalized power cones, we set it to the Dual scaling strategy
-        if s.cones.type_counts[GenPowerCone] > 0 || s.cones.type_counts[PowerMeanCone] > 0 || s.cones.type_counts[EntropyCone] > 0
-            scaling = Dual::ScalingStrategy
-        else
-            scaling = PrimalDual::ScalingStrategy
-        end
+        scaling = allows_primal_dual_scaling(s.cones) ? PrimalDual::ScalingStrategy : Dual::ScalingStrategy;
 
         while true
 
@@ -396,7 +391,7 @@ function solver_backtrack_step_to_barrier(
     s::Solver{T}, αinit::T
 ) where {T}
 
-    backtrack = s.settings.linesearch_backtrack_step
+    step = s.settings.linesearch_backtrack_step
     α = αinit
 
     for j = 1:50
@@ -405,7 +400,7 @@ function solver_backtrack_step_to_barrier(
         if barrier < one(T)
             return α
         else
-            α = backtrack*α   #backtrack line search
+            α = step*α   #backtrack line search
         end
     end
 

@@ -210,6 +210,37 @@ function Δs_from_Δz_offset!(
     return nothing
 end
 
+#YC: an extension for _step_length_3d_cone, we could merge two together
+function _step_length_n_cone(
+    K::EntropyCone{T},
+    dq::AbstractVector{T},
+    q::AbstractVector{T},
+    α_init::T,
+    α_min::T,
+    backtrack::T,
+    is_in_cone_fcn::Function
+) where {T}
+
+    dim = K.dim
+    wq = similar(K.grad)
+    α = α_init
+    while true
+        #@. wq = q + α*dq
+        @inbounds for i = 1:dim
+            wq[i] = q[i] + α*dq[i]
+        end
+
+        if is_in_cone_fcn(wq)
+            break
+        end
+        if (α *= backtrack) < α_min
+            α = zero(T)
+            break
+        end
+    end
+    return α
+end
+
 #return maximum allowable step length while remaining in the generalized power cone
 function step_length(
     K::EntropyCone{T},

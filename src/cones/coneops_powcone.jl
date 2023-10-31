@@ -71,10 +71,10 @@ function update_scaling!(
 ) where {T}
 
     # update both gradient and Hessian for function f*(z) at the point z
-    _update_dual_grad_H(K,z)
+    update_dual_grad_H(K,z)
 
     # update the scaling matrix Hs
-    _update_Hs(K,s,z,μ,scaling_strategy)
+    update_Hs(K,s,z,μ,scaling_strategy)
 
     # K.z .= z
     @inbounds for i = 1:3
@@ -136,9 +136,11 @@ function combined_ds_shift!(
     step_s::AbstractVector{T},
     σμ::T
 ) where {T}
-    
+
+    η = similar(K.grad); η .= zero(T)
+
     #3rd order correction requires input variables z
-    η = _higher_correction!(K,step_s,step_z)     
+    higher_correction!(K, η, step_s,step_z)     
 
     @inbounds for i = 1:3
         shift[i] = K.grad[i]*σμ - η[i]
@@ -173,16 +175,17 @@ function step_length(
      αmax::T,
 ) where {T}
 
-    backtrack = settings.linesearch_backtrack_step
-    αmin      = settings.min_terminate_step_length
+    step = settings.linesearch_backtrack_step
+    αmin = settings.min_terminate_step_length
+    work = similar(K.grad); work .= zero(T)
 
     #need functions as closures to capture the power K.α
     #and use the same backtrack mechanism as the expcone
-    is_primal_feasible_fcn = s -> _is_primal_feasible_powcone(s,K.α)
-    is_dual_feasible_fcn   = s -> _is_dual_feasible_powcone(s,K.α)
+    is_prim_feasible_fcn = s -> is_primal_feasible(K,s,K.α)
+    is_dual_feasible_fcn = s -> is_dual_feasible(K,s,K.α)
 
-    αz = _step_length_3d_cone(K, dz, z, αmax, αmin, backtrack, is_dual_feasible_fcn)
-    αs = _step_length_3d_cone(K, ds, s, αmax, αmin, backtrack, is_primal_feasible_fcn)
+    αz = backtrack_search(K, dz, z, αmax, αmin, step, is_dual_feasible_fcn, work)
+    αs = backtrack_search(K, ds, s, αmax, αmin, step, is_prim_feasible_fcn, work)
 
     return (αz,αs)
 end
@@ -204,15 +207,15 @@ function compute_barrier(
     cur_z    = (z[1] + α*dz[1], z[2] + α*dz[2], z[3] + α*dz[3])
     cur_s    = (s[1] + α*ds[1], s[2] + α*ds[2], s[3] + α*ds[3])
 
-    barrier += _barrier_dual(K, cur_z)
-    barrier += _barrier_primal(K, cur_s)
+    barrier += barrier_dual(K, cur_z)
+    barrier += barrier_primal(K, cur_s)
 
     return barrier
 end
 
 
 # ----------------------------------------------
-#  internal operations for power cones
+#  nonsymmetric cone operations for power cones
 #
 # Primal Power cone: s1^{α}s2^{1-α} ≥ s3, s1,s2 ≥ 0
 # Dual Power cone: (z1/α)^{α} * (z2/(1-α))^{1-α} ≥ z3, z1,z2 ≥ 0
@@ -222,7 +225,7 @@ end
 # and stores the result at g
 
 
-@inline function _barrier_dual(
+@inline function barrier_dual(
     K::PowerCone{T},
     z::Union{AbstractVector{T}, NTuple{3,T}}
 ) where {T}
@@ -233,7 +236,7 @@ end
 
 end
 
-@inline function _barrier_primal(
+@inline function barrier_primal(
     K::PowerCone{T},
     s::Union{AbstractVector{T}, NTuple{3,T}}
 ) where {T}
@@ -243,14 +246,17 @@ end
 
     α = K.α
 
-    g = _gradient_primal(K,s)     #compute g(s)
+    g = gradient_primal(K,s)     #compute g(s)
     return logsafe((-g[1]/α)^(2*α) * (-g[2]/(1-α))^(2-2*α) - g[3]*g[3]) + (1-α)*logsafe(-g[1]) + α*logsafe(-g[2]) - 3
 end 
 
 
 
 # Returns true if s is primal feasible
-function _is_primal_feasible_powcone(s::AbstractVector{T},α::T) where {T}
+function is_primal_feasible(
+    ::PowerCone{T},
+    s::AbstractVector{T},α::T
+) where {T}
 
     if (s[1] > 0 && s[2] > 0)
         res = exp(2*α*logsafe(s[1]) + 2*(1-α)*logsafe(s[2])) - s[3]*s[3]
@@ -263,7 +269,9 @@ function _is_primal_feasible_powcone(s::AbstractVector{T},α::T) where {T}
 end
 
 # Returns true if s is dual feasible
-function _is_dual_feasible_powcone(z::AbstractVector{T},α::T) where {T}
+function is_dual_feasible(
+    ::PowerCone{T},
+    z::AbstractVector{T},α::T) where {T}
 
     if (z[1] > 0 && z[2] > 0)
         res = exp(2*α*logsafe(z[1]/α) + 2*(1-α)*logsafe(z[2]/(1-α))) - z[3]*z[3]
@@ -277,7 +285,7 @@ end
 
 # Compute the primal gradient of f(s) at s
 # solve it by the Newton-Raphson method
-function _gradient_primal(
+function gradient_primal(
     K::PowerCone{T},
     s::Union{AbstractVector{T}, NTuple{3,T}},
 ) where {T}
@@ -286,7 +294,7 @@ function _gradient_primal(
 
     # unscaled ϕ
     ϕ = (s[1])^(2*α)*(s[2])^(2-2*α)
-    g = similar(K.grad)
+    g = similar(K.grad); g .= zero(T)
 
 
     # obtain g3 from the Newton-Raphson method
@@ -306,6 +314,131 @@ function _gradient_primal(
     return SVector(g)
 
 end
+
+
+# 3rd-order correction at the point z.  Output is η.
+
+# 3rd order correction: 
+# η = -0.5*[(dot(u,Hψ,v)*ψ - 2*dotψu*dotψv)/(ψ*ψ*ψ)*gψ + 
+#            dotψu/(ψ*ψ)*Hψv + dotψv/(ψ*ψ)*Hψu - 
+#            dotψuv/ψ + dothuv]
+# where: 
+# Hψ = [  2*α*(2*α-1)*ϕ/(z1*z1)     4*α*(1-α)*ϕ/(z1*z2)       0;
+#         4*α*(1-α)*ϕ/(z1*z2)     2*(1-α)*(1-2*α)*ϕ/(z2*z2)   0;
+#         0                       0                          -2;]
+function higher_correction!(
+    K::PowerCone{T},
+    η::AbstractVector{T},
+    ds::AbstractVector{T},
+    v::AbstractVector{T}
+) where {T}
+
+    # u for H^{-1}*Δs
+    H = K.H_dual
+    z = K.z
+
+    #solve H*u = ds
+    cholH = similar(K.H_dual); cholH .= zero(T)
+    issuccess = cholesky_3x3_explicit_factor!(cholH,H)
+    if issuccess 
+        u = cholesky_3x3_explicit_solve!(cholH,ds)
+    else 
+        return SVector(zero(T),zero(T),zero(T))
+    end
+
+    α = K.α
+
+    ϕ = (z[1]/α)^(2*α)*(z[2]/(1-α))^(2-2*α)
+    ψ = ϕ - z[3]*z[3]
+
+    # Reuse cholH memory for further computation
+    Hψ = cholH
+    
+    η[1] = 2*α*ϕ/z[1]
+    η[2] = 2*(1-α)*ϕ/z[2]
+    η[3] = -2*z[3]
+
+    Hψ[1,1] = 2*α*(2*α-1)*ϕ/(z[1]*z[1])
+    Hψ[1,2] = 4*α*(1-α)*ϕ/(z[1]*z[2])
+    Hψ[2,1] = Hψ[1,2]
+    Hψ[1,3] = 0
+    Hψ[3,1] = 0
+    Hψ[2,2] = 2*(1-α)*(1-2*α)*ϕ/(z[2]*z[2])
+    Hψ[2,3] = 0
+    Hψ[3,2] = 0
+    Hψ[3,3] = -2.
+
+    dotψu = dot(η,u)
+    dotψv = dot(η,v)
+
+    Hψv = similar(K.grad); Hψv .= zero(T)
+    Hψv[1] = Hψ[1,1]*v[1]+Hψ[1,2]*v[2]
+    Hψv[2] = Hψ[2,1]*v[1]+Hψ[2,2]*v[2]
+    Hψv[3] = -2*v[3]
+
+    coef = (dot(u,Hψv)*ψ - 2*dotψu*dotψv)/(ψ*ψ*ψ)
+    coef2 = 4*α*(2*α-1)*(1-α)*ϕ*(u[1]/z[1] - u[2]/z[2])*(v[1]/z[1] - v[2]/z[2])/ψ
+    inv_ψ2 = 1/ψ/ψ
+
+    η[1] = coef*η[1] - 2*(1-α)*u[1]*v[1]/(z[1]*z[1]*z[1]) + 
+           coef2/z[1] + Hψv[1]*dotψu*inv_ψ2
+
+    η[2] = coef*η[2] - 2*α*u[2]*v[2]/(z[2]*z[2]*z[2]) - 
+           coef2/z[2] + Hψv[2]*dotψu*inv_ψ2
+
+    η[3] = coef*η[3] + Hψv[3]*dotψu*inv_ψ2
+
+    # reuse vector Hψv
+    Hψu = Hψv
+    Hψu[1] = Hψ[1,1]*u[1]+Hψ[1,2]*u[2]
+    Hψu[2] = Hψ[2,1]*u[1]+Hψ[2,2]*u[2]
+    Hψu[3] = -2*u[3]
+
+    # @. η <= (η + Hψu*dotψv*inv_ψ2)/2
+    @inbounds for i = 1:3
+        η[i] = (η[i] + Hψu[i]*dotψv*inv_ψ2)/2
+    end
+    # coercing to an SArray means that the MArray we computed 
+    # locally in this function is seemingly not heap allocated 
+    SArray(η)
+end
+
+
+# update gradient and Hessian at dual z
+function update_dual_grad_H(
+    K::PowerCone{T},
+    z::AbstractVector{T}
+) where {T}
+    
+    H = K.H_dual
+    α = K.α
+
+    ϕ = (z[1]/α)^(2*α)*(z[2]/(1-α))^(2-2*α)
+    ψ = ϕ - z[3]*z[3]
+
+    # use K.grad as a temporary workspace
+    gψ = K.grad
+    gψ[1] = 2*α*ϕ/(z[1]*ψ)
+    gψ[2] = 2*(1-α)*ϕ/(z[2]*ψ)
+    gψ[3] = -2*z[3]/ψ
+
+    H[1,1] = gψ[1]*gψ[1] - 2*α*(2*α-1)*ϕ/(z[1]*z[1]*ψ) + (1-α)/(z[1]*z[1])
+    H[1,2] = gψ[1]*gψ[2] - 4*α*(1-α)*ϕ/(z[1]*z[2]*ψ)
+    H[2,1] = H[1,2]
+    H[2,2] = gψ[2]*gψ[2] - 2*(1-α)*(1-2*α)*ϕ/(z[2]*z[2]*ψ) + α/(z[2]*z[2])
+    H[1,3] = gψ[1]*gψ[3]
+    H[3,1] = H[1,3]
+    H[2,3] = gψ[2]*gψ[3]
+    H[3,2] = H[2,3]
+    H[3,3] = gψ[3]*gψ[3] + 2/ψ
+
+    # compute the gradient at z
+    grad = K.grad
+    grad[1] = -2*α*ϕ/(z[1]*ψ) - (1-α)/z[1]
+    grad[2] = -2*(1-α)*ϕ/(z[2]*ψ) - α/z[2]
+    grad[3] = 2*z[3]/ψ
+end
+
 
 # Newton-Raphson method:
 # solve a one-dimensional equation f(x) = 0
@@ -341,130 +474,5 @@ function _newton_raphson_powcone(
              (2-α)/s3) - 2*(x + 1/s3)/(t1 + t2)
     end
     
-    return _newton_raphson_onesided(x0,f0,f1)
+     return _newton_raphson_onesided(x0,f0,f1)
 end
-
-
-# 3rd-order correction at the point z.  Output is η.
-
-# 3rd order correction: 
-# η = -0.5*[(dot(u,Hψ,v)*ψ - 2*dotψu*dotψv)/(ψ*ψ*ψ)*gψ + 
-#            dotψu/(ψ*ψ)*Hψv + dotψv/(ψ*ψ)*Hψu - 
-#            dotψuv/ψ + dothuv]
-# where: 
-# Hψ = [  2*α*(2*α-1)*ϕ/(z1*z1)     4*α*(1-α)*ϕ/(z1*z2)       0;
-#         4*α*(1-α)*ϕ/(z1*z2)     2*(1-α)*(1-2*α)*ϕ/(z2*z2)   0;
-#         0                       0                          -2;]
-function _higher_correction!(
-    K::PowerCone{T},
-    ds::AbstractVector{T},
-    v::AbstractVector{T}
-) where {T}
-
-    # u for H^{-1}*Δs
-    H = K.H_dual
-    z = K.z
-
-    #solve H*u = ds
-    cholH = similar(K.H_dual)
-    issuccess = cholesky_3x3_explicit_factor!(cholH,H)
-    if issuccess 
-        u = cholesky_3x3_explicit_solve!(cholH,ds)
-    else 
-        return SVector(zero(T),zero(T),zero(T))
-    end
-
-    α = K.α
-
-    ϕ = (z[1]/α)^(2*α)*(z[2]/(1-α))^(2-2*α)
-    ψ = ϕ - z[3]*z[3]
-
-    # Reuse cholH memory for further computation
-    Hψ = cholH
-    
-    η = similar(K.grad)
-    η[1] = 2*α*ϕ/z[1]
-    η[2] = 2*(1-α)*ϕ/z[2]
-    η[3] = -2*z[3]
-
-    Hψ[1,1] = 2*α*(2*α-1)*ϕ/(z[1]*z[1])
-    Hψ[1,2] = 4*α*(1-α)*ϕ/(z[1]*z[2])
-    Hψ[2,1] = Hψ[1,2]
-    Hψ[1,3] = 0
-    Hψ[3,1] = 0
-    Hψ[2,2] = 2*(1-α)*(1-2*α)*ϕ/(z[2]*z[2])
-    Hψ[2,3] = 0
-    Hψ[3,2] = 0
-    Hψ[3,3] = -2.
-
-    dotψu = dot(η,u)
-    dotψv = dot(η,v)
-
-    Hψv = similar(K.grad)
-    Hψv[1] = Hψ[1,1]*v[1]+Hψ[1,2]*v[2]
-    Hψv[2] = Hψ[2,1]*v[1]+Hψ[2,2]*v[2]
-    Hψv[3] = -2*v[3]
-
-    coef = (dot(u,Hψv)*ψ - 2*dotψu*dotψv)/(ψ*ψ*ψ)
-    coef2 = 4*α*(2*α-1)*(1-α)*ϕ*(u[1]/z[1] - u[2]/z[2])*(v[1]/z[1] - v[2]/z[2])/ψ
-    inv_ψ2 = 1/ψ/ψ
-
-    η[1] = coef*η[1] - 2*(1-α)*u[1]*v[1]/(z[1]*z[1]*z[1]) + 
-           coef2/z[1] + Hψv[1]*dotψu*inv_ψ2
-
-    η[2] = coef*η[2] - 2*α*u[2]*v[2]/(z[2]*z[2]*z[2]) - 
-           coef2/z[2] + Hψv[2]*dotψu*inv_ψ2
-
-    η[3] = coef*η[3] + Hψv[3]*dotψu*inv_ψ2
-
-    # reuse vector Hψv
-    Hψu = Hψv
-    Hψu[1] = Hψ[1,1]*u[1]+Hψ[1,2]*u[2]
-    Hψu[2] = Hψ[2,1]*u[1]+Hψ[2,2]*u[2]
-    Hψu[3] = -2*u[3]
-
-    # @. η <= (η + Hψu*dotψv*inv_ψ2)/2
-    @inbounds for i = 1:3
-        η[i] = (η[i] + Hψu[i]*dotψv*inv_ψ2)/2
-    end
-    # coercing to an SArray means that the MArray we computed 
-    # locally in this function is seemingly not heap allocated 
-    SArray(η)
-end
-
-
-# update gradient and Hessian at dual z
-function _update_dual_grad_H(
-    K::PowerCone{T},
-    z::AbstractVector{T}
-) where {T}
-    
-    H = K.H_dual
-    α = K.α
-
-    ϕ = (z[1]/α)^(2*α)*(z[2]/(1-α))^(2-2*α)
-    ψ = ϕ - z[3]*z[3]
-
-    # use K.grad as a temporary workspace
-    gψ = K.grad
-    gψ[1] = 2*α*ϕ/(z[1]*ψ)
-    gψ[2] = 2*(1-α)*ϕ/(z[2]*ψ)
-    gψ[3] = -2*z[3]/ψ
-
-    H[1,1] = gψ[1]*gψ[1] - 2*α*(2*α-1)*ϕ/(z[1]*z[1]*ψ) + (1-α)/(z[1]*z[1])
-    H[1,2] = gψ[1]*gψ[2] - 4*α*(1-α)*ϕ/(z[1]*z[2]*ψ)
-    H[2,1] = H[1,2]
-    H[2,2] = gψ[2]*gψ[2] - 2*(1-α)*(1-2*α)*ϕ/(z[2]*z[2]*ψ) + α/(z[2]*z[2])
-    H[1,3] = gψ[1]*gψ[3]
-    H[3,1] = H[1,3]
-    H[2,3] = gψ[2]*gψ[3]
-    H[3,2] = H[2,3]
-    H[3,3] = gψ[3]*gψ[3] + 2/ψ
-
-    # compute the gradient at z
-    grad = K.grad
-    grad[1] = -2*α*ϕ/(z[1]*ψ) - (1-α)/z[1]
-    grad[2] = -2*(1-α)*ϕ/(z[2]*ψ) - α/z[2]
-    grad[3] = 2*z[3]/ψ
-end
-

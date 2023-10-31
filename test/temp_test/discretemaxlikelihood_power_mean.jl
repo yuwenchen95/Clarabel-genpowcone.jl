@@ -29,7 +29,7 @@ model = Model(Clarabel.Optimizer)
 @variable(model, t)
 @objective(model, Min, -t)
 @constraint(model, sum(p) == 1)
-@constraint(model, vcat(p,t) in Clarabel.PowerMeanConeT(freq,d))
+@constraint(model, vcat(p,t) in Clarabel.MOI.PowerMeanCone(freq))
 # MOI.set(model, MOI.Silent(), true)      #Diable printing information
 optimize!(model)
 

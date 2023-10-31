@@ -2,12 +2,24 @@
 # Power Mean Cone
 # ----------------------------------------------------
 
+#dimensions of the subcomponents
+dim1(K::PowerMeanCone{T}) where {T} = length(K.α)
+dim2(K::PowerMeanCone{T}) where {T} = 1
+
 # degree of the cone is the dim of power vector + 1
 dim(K::PowerMeanCone{T}) where {T} = K.dim
 degree(K::PowerMeanCone{T}) where {T} = K.dim
 numel(K::PowerMeanCone{T}) where {T} = dim(K)
 
+function is_sparse_expandable(::PowerMeanCone{T}) where{T}
+    # we do not curently have a way of representing
+    # this cone in non-expanded form
+    return true
+end
+
 is_symmetric(::PowerMeanCone{T}) where {T} = false
+allows_primal_dual_scaling(::PowerMeanCone{T}) where {T} = false
+
 
 function shift_to_cone!(
     K::PowerMeanCone{T},
@@ -85,12 +97,12 @@ function update_scaling!(
     # but this could be implemented elsewhere; μ is also used later 
     # when updating the off-diagonal terms of Hs; Recording μ is redundant 
     # for the dual scaling as it is a global parameter
-    K.μ = μ
+    K.data.μ = μ
 
     # K.z .= z
     dim = K.dim
     @inbounds for i = 1:dim
-        K.z[i] = z[i]
+        K.data.z[i] = z[i]
     end
 
     return is_scaling_success = true
@@ -113,10 +125,10 @@ function get_Hs!(
     #extra 3 entries at the bottom right of the block.
     #The ConicVector for s and z (and its views) don't
     #know anything about the 3 extra sparsifying entries
-    dim1 = K.d
-    μ = K.μ
-    @. Hsblock[1:dim1]    = μ*K.d1
-    Hsblock[end] = μ*K.d2
+    dim1 = K.data.d
+    μ = K.data.μ
+    @. Hsblock[1:dim1]    = μ*K.data.d1
+    Hsblock[end] = μ*K.data.d2
 
 end
 
@@ -129,21 +141,22 @@ function mul_Hs!(
 ) where {T}
 
     # Hs = μ*(D + pp' -qq' -rr')
-    d1 = K.d1
-    d2 = K.d2
-    dim1 = K.d
+    d1 = K.data.d1
+    d2 = K.data.d2
+    dim1 = K.data.d
 
-    coef_p = dot(K.p,x)
-    coef_q = dot(K.q,x[1:dim1])
+    coef_p = dot(K.data.p,x)
+    coef_q = dot(K.data.q,x[1:dim1])
 
     x1 = @view x[1:dim1]
     y1 = @view y[1:dim1]
     
-    @. y = coef_p*K.p
-    @. y1 += d1*x1 - coef_q*K.q
-    y[end] += d2*x[end] - x[end]*K.r*K.r
+    @. y = coef_p*K.data.p
+    @. y1 += d1*x1 - coef_q*K.data.q
+    r = K.data.r[1]
+    y[end] += d2*x[end] - x[end]*r*r
     
-    @. y *= K.μ
+    @. y *= K.data.μ
 
 end
 
@@ -173,7 +186,7 @@ function combined_ds_shift!(
     # η = _higher_correction!(K,step_s,step_z)     
 
     @inbounds for i = 1:K.dim
-        shift[i] = K.grad[i]*σμ # - η[i]
+        shift[i] = K.data.grad[i]*σμ # - η[i]
     end
 
     return nothing
@@ -194,6 +207,37 @@ function Δs_from_Δz_offset!(
     return nothing
 end
 
+
+function _step_length_n_cone(
+    K::PowerMeanCone{T},
+    dq::AbstractVector{T},
+    q::AbstractVector{T},
+    α_init::T,
+    α_min::T,
+    backtrack::T,
+    is_in_cone_fcn::Function
+) where {T}
+
+    dim = K.dim
+    wq = K.data.work
+    α = α_init
+    while true
+        #@. wq = q + α*dq
+        @inbounds for i = 1:dim
+            wq[i] = q[i] + α*dq[i]
+        end
+
+        if is_in_cone_fcn(wq)
+            break
+        end
+        if (α *= backtrack) < α_min
+            α = zero(T)
+            break
+        end
+    end
+    return α
+end
+
 #return maximum allowable step length while remaining in the power mean cone
 function step_length(
     K::PowerMeanCone{T},
@@ -210,8 +254,8 @@ function step_length(
 
     #need functions as closures to capture the power K.α
     #and use the same backtrack mechanism as the expcone
-    is_primal_feasible_fcn = s -> _is_primal_feasible_powmeancone(s,K.α,K.d)
-    is_dual_feasible_fcn   = s -> _is_dual_feasible_powmeancone(s,K.α,K.d)
+    is_primal_feasible_fcn = s -> _is_primal_feasible_powmeancone(s,K.α,K.data.d)
+    is_dual_feasible_fcn   = s -> _is_dual_feasible_powmeancone(s,K.α,K.data.d)
 
     αz = _step_length_n_cone(K, dz, z, αmax, αmin, backtrack, is_dual_feasible_fcn)
     αs = _step_length_n_cone(K, ds, s, αmax, αmin, backtrack, is_primal_feasible_fcn)
@@ -229,25 +273,21 @@ function compute_barrier(
 ) where {T}
 
     dim = K.dim
+    wq = K.data.work
 
     barrier = zero(T)
-
-    # we want to avoid allocating a vector for the intermediate 
-    # sums, so the two barrier functions are written to accept 
-    # both vectors and MVectors. 
-    wq = similar(K.grad)
 
     #primal barrier
     @inbounds for i = 1:dim
         wq[i] = s[i] + α*ds[i]
     end
-    barrier += _barrier_primal(K, wq)
+    barrier += barrier_primal(K, wq)
 
     #dual barrier
     @inbounds for i = 1:dim
         wq[i] = z[i] + α*dz[i]
     end
-    barrier += _barrier_dual(K, wq)
+    barrier += barrier_dual(K, wq)
 
     return barrier
 end
@@ -264,13 +304,13 @@ end
 # and stores the result at g
 
 
-@inline function _barrier_dual(
+@inline function barrier_dual(
     K::PowerMeanCone{T},
     z::Union{AbstractVector{T}, NTuple{N,T}}
 ) where {N<:Integer,T}
 
     # Dual barrier
-    dim1 = K.d
+    dim1 = K.data.d
     α = K.α
 
     res = zero(T)
@@ -288,7 +328,7 @@ end
 
 end
 
-@inline function _barrier_primal(
+@inline function barrier_primal(
     K::PowerMeanCone{T},
     s::Union{AbstractVector{T}, NTuple{N,T}}
 ) where {N<:Integer,T}
@@ -296,11 +336,11 @@ end
     # Primal barrier: f(s) = ⟨s,g(s)⟩ - f*(-g(s))
     # NB: ⟨s,g(s)⟩ = -(dim1+1) = - ν
 
-    minus_g = similar(K.grad)
+    minus_g = K.data.work_pb
     minus_gradient_primal(K,s,minus_g)     #compute g(s)
 
     #YC: need to consider the memory issue later
-    return -_barrier_dual(K,minus_g) - degree(K)
+    return -barrier_dual(K,minus_g) - degree(K)
 end
 
 
@@ -336,7 +376,7 @@ function _is_dual_feasible_powmeancone(
     if (all(z[1:dim1] .> zero(T)) && z[end] < zero(T))
         res = zero(T)
         @inbounds for i = 1:dim1
-            res += α[i]*logsafe(z[i]/α[i])
+            res += α[i]*(logsafe(z[i]) - logsafe(α[i]))
         end
         res = exp(res) + z[end]
         if res > zero(T)
@@ -356,7 +396,7 @@ function minus_gradient_primal(
 ) where {N<:Integer,T}
 
     α = K.α
-    dim1 = K.d
+    dim1 = K.data.d
     g = minus_g
 
     # obtain g0 from the Newton-Raphson method
@@ -471,12 +511,11 @@ function _update_dual_grad_H(
 ) where {T}
     
     α = K.α
-    p = K.p
-    q = K.q        
-    d1 = K.d1
+    p = K.data.p
+    q = K.data.q        
+    d1 = K.data.d1
 
-    dim1 = K.d
-    dim = K.dim
+    dim1 = K.data.d
 
     # ϕ = ∏_{i ∈ dim1}(ui/αi)^(αi), ζ = φ + w
     ϕ = one(T)
@@ -487,8 +526,8 @@ function _update_dual_grad_H(
     @assert ζ > zero(T)
 
     # compute the gradient at z
-    grad = K.grad
-    τ = K.q           # τ shares memory with K.q
+    grad = K.data.grad
+    τ = K.data.q           # τ shares memory with K.q
     @inbounds for i = 1:dim1
         τ[i] = α[i]/(z[i]*ζ)
         grad[i] = -τ[i]*ϕ - (1-α[i])/z[i]
@@ -504,13 +543,13 @@ function _update_dual_grad_H(
     @inbounds for i = 1:dim1
         d1[i] = -grad[i]/z[i]
     end   
-    K.d2 = 1/(z[end]^2) + 1
+    K.data.d2 = 1/(z[end]^2) + 1
 
     # compute p, q, r where τ shares memory with q
     p[1:dim1] .= p0*τ
     p[end] = p1/ζ
 
     q .*= q0      #τ is abandoned
-    K.r = one(T)
+    K.data.r[1] = one(T)
 
 end

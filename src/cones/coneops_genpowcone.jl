@@ -2,12 +2,23 @@
 # Generalized Power Cone
 # ----------------------------------------------------
 
+#dimensions of the subcomponents
+dim1(K::GenPowerCone{T}) where {T} = length(K.α)
+dim2(K::GenPowerCone{T}) where {T} = K.dim2
+
 # degree of the cone is the dim of power vector + 1
-dim(K::GenPowerCone{T}) where {T} = K.dim
-degree(K::GenPowerCone{T}) where {T} = K.dim1 + 1
+dim(K::GenPowerCone{T}) where {T} = dim1(K) + dim2(K)
+degree(K::GenPowerCone{T}) where {T} = dim1(K) + 1
 numel(K::GenPowerCone{T}) where {T} = dim(K)
 
+function is_sparse_expandable(::GenPowerCone{T}) where{T}
+    # we do not curently have a way of representing
+    # this cone in non-expanded form
+    return true
+end
+
 is_symmetric(::GenPowerCone{T}) where {T} = false
+allows_primal_dual_scaling(::GenPowerCone{T}) where {T} = false
 
 function shift_to_cone!(
     K::GenPowerCone{T},
@@ -15,7 +26,7 @@ function shift_to_cone!(
 ) where{T}
 
     # We should never end up shifting to this cone, since 
-    # asymmetric problems should always use unit_initialization!
+    # asymmetric problems should always use unit initialization
     error("This function should never be reached.");
     # 
 end
@@ -26,19 +37,15 @@ function unit_initialization!(
     s::AbstractVector{T}
  ) where{T}
  
-     α = K.α
-     dim1 = K.dim1
-     dim  = K.dim
- 
-    # init u[i] = √(1+αi), i ∈ [dim1]
-    @inbounds for i = 1:dim1
-        s[i] = sqrt(one(T)+α[i])
+    # init u[i] = √(1+αi), i ∈ [dim1(K)]
+    @inbounds for i = 1:dim1(K)
+        s[i] = sqrt(one(T)+K.α[i])
     end
     # init w = 0
-    s[dim1+1:end] .= zero(T)
+    s[dim1(K)+1:end] .= zero(T)
  
      #@. z = s
-     @inbounds for i = 1:dim
+     @inbounds for i = 1:dim(K)
          z[i] = s[i]
      end
  
@@ -63,19 +70,12 @@ function update_scaling!(
 ) where {T}
 
     # update both gradient and Hessian for function f*(z) at the point z
-    _update_dual_grad_H(K,z)
-
-    # update the scaling matrix Hs
-    # YC: dual-scaling at present; we time μ to the diagonal here,
-    # but this could be implemented elsewhere; μ is also used later 
-    # when updating the off-diagonal terms of Hs; Recording μ is redundant 
-    # for the dual scaling as it is a global parameter
-    K.μ = μ
+    update_dual_grad_H(K,z)
+    K.data.μ = μ
 
     # K.z .= z
-    dim = K.dim
-    @inbounds for i = 1:dim
-        K.z[i] = z[i]
+    @inbounds for i in eachindex(z)
+        K.data.z[i] = z[i]
     end
 
     return is_scaling_success = true
@@ -98,10 +98,11 @@ function get_Hs!(
     #extra 3 entries at the bottom right of the block.
     #The ConicVector for s and z (and its views) don't
     #know anything about the 3 extra sparsifying entries
-    dim1 = K.dim1
-    μ = K.μ
-    @. Hsblock[1:dim1]    = μ*K.d1
-    @. Hsblock[dim1+1:end] = μ*K.d2
+    dim1 = Clarabel.dim1(K)
+    data = K.data
+    
+    @. Hsblock[1:dim1]     = data.μ*data.d1
+    @. Hsblock[dim1+1:end] = data.μ*data.d2
 
 end
 
@@ -114,24 +115,21 @@ function mul_Hs!(
 ) where {T}
 
     # Hs = μ*(D + pp' -qq' -rr')
-    d1 = K.d1
-    d2 = K.d2
-    dim1 = K.dim1
 
-    coef_p = dot(K.p,x)
-    coef_q = dot(K.q,x[1:dim1])
-    coef_r = dot(K.r,x[dim1+1:end])
+    data = K.data
 
-    x1 = @view x[1:dim1]
-    x2 = @view x[dim1+1:end]
-    y1 = @view y[1:dim1]
-    y2 = @view y[dim1+1:end]
+    rng1 = 1:dim1(K)
+    rng2 = (dim1(K)+1):dim(K)
+
+    coef_p = dot(data.p,x)
+    @views coef_q = dot(data.q,x[rng1])
+    @views coef_r = dot(data.r,x[rng2])
     
-    @. y = coef_p*K.p
-    @. y1 += d1*x1 - coef_q*K.q
-    @. y2 += d2*x2 - coef_r*K.r
-    
-    @. y *= K.μ
+    @. y[rng1] = data.d1*x[rng1] - coef_q*K.data.q
+    @. y[rng2] = data.d2*x[rng2] - coef_r*K.data.r
+
+    @. y += coef_p*data.p
+    @. y *= data.μ
 
 end
 
@@ -142,7 +140,7 @@ function affine_ds!(
 ) where {T}
 
     # @. x = y
-    @inbounds for i = 1:K.dim
+    @inbounds for i = 1:dim(K)
         ds[i] = s[i]
     end
 end
@@ -158,10 +156,11 @@ function combined_ds_shift!(
     #YC: No 3rd order correction at present
 
     # #3rd order correction requires input variables z
-    # η = _higher_correction!(K,step_s,step_z)     
+    # and an allocated vector for the correction η
+    # higher_correction!(K,η,step_s,step_z)     
 
-    @inbounds for i = 1:K.dim
-        shift[i] = K.grad[i]*σμ # - η[i]
+    @inbounds for i = 1:Clarabel.dim(K)
+        shift[i] = K.data.grad[i]*σμ # - η[i]
     end
 
     return nothing
@@ -175,7 +174,7 @@ function Δs_from_Δz_offset!(
     z::AbstractVector{T}
 ) where {T}
 
-    @inbounds for i = 1:K.dim
+    @inbounds for i = 1:dim(K)
         out[i] = ds[i]
     end
 
@@ -193,16 +192,15 @@ function step_length(
      αmax::T,
 ) where {T}
 
-    backtrack = settings.linesearch_backtrack_step
-    αmin      = settings.min_terminate_step_length
+    step = settings.linesearch_backtrack_step
+    αmin = settings.min_terminate_step_length
+    work = K.data.work
 
-    #need functions as closures to capture the power K.α
-    #and use the same backtrack mechanism as the expcone
-    is_primal_feasible_fcn = s -> _is_primal_feasible_genpowcone(s,K.α,K.dim1)
-    is_dual_feasible_fcn   = s -> _is_dual_feasible_genpowcone(s,K.α,K.dim1)
+    is_prim_feasible_fcn = s -> is_primal_feasible(K,s)
+    is_dual_feasible_fcn = s -> is_dual_feasible(K,s)
 
-    αz = _step_length_n_cone(K, dz, z, αmax, αmin, backtrack, is_dual_feasible_fcn)
-    αs = _step_length_n_cone(K, ds, s, αmax, αmin, backtrack, is_primal_feasible_fcn)
+    αz = backtrack_search(K, dz, z, αmax, αmin, step, is_dual_feasible_fcn,work)
+    αs = backtrack_search(K, ds, s, αmax, αmin, step, is_prim_feasible_fcn,work)
 
     return (αz,αs)
 end
@@ -216,26 +214,20 @@ function compute_barrier(
     α::T
 ) where {T}
 
-    dim = K.dim
-
     barrier = zero(T)
-
-    # we want to avoid allocating a vector for the intermediate 
-    # sums, so the two barrier functions are written to accept 
-    # both vectors and MVectors. 
-    wq = similar(K.grad)
+    work = K.data.work
 
     #primal barrier
-    @inbounds for i = 1:dim
-        wq[i] = s[i] + α*ds[i]
+    @inbounds for i = 1:dim(K)
+        work[i] = s[i] + α*ds[i]
     end
-    barrier += _barrier_primal(K, wq)
+    barrier += barrier_primal(K, work)
 
     #dual barrier
-    @inbounds for i = 1:dim
-        wq[i] = z[i] + α*dz[i]
+    @inbounds for i = 1:dim(K)
+        work[i] = z[i] + α*dz[i]
     end
-    barrier += _barrier_dual(K, wq)
+    barrier += barrier_dual(K, work)
 
     return barrier
 end
@@ -252,59 +244,21 @@ end
 # and stores the result at g
 
 
-@inline function _barrier_dual(
-    K::GenPowerCone{T},
-    z::Union{AbstractVector{T}, NTuple{N,T}}
-) where {N<:Integer,T}
-
-    # Dual barrier
-    dim1 = K.dim1
-    α = K.α
-
-    res = zero(T)
-    @inbounds for i = 1:dim1
-        res += 2*α[i]*logsafe(z[i]/α[i])
-    end
-    res = exp(res) - dot(z[dim1+1:end],z[dim1+1:end])
-    barrier = -logsafe(res) 
-    @inbounds for i = 1:dim1
-        barrier -= (one(T)-α[i])*logsafe(z[i])
-    end
-
-    return barrier
-
-end
-
-@inline function _barrier_primal(
-    K::GenPowerCone{T},
-    s::Union{AbstractVector{T}, NTuple{N,T}}
-) where {N<:Integer,T}
-
-    # Primal barrier: f(s) = ⟨s,g(s)⟩ - f*(-g(s))
-    # NB: ⟨s,g(s)⟩ = -(dim1+1) = - ν
-
-    minus_g = similar(K.grad)
-    minus_gradient_primal(K,s,minus_g)     #compute g(s)
-
-    #YC: need to consider the memory issue later
-    return -_barrier_dual(K,minus_g) - degree(K)
-end 
-
-
-
 # Returns true if s is primal feasible
-function _is_primal_feasible_genpowcone(
+function is_primal_feasible(
+    K::GenPowerCone{T},
     s::AbstractVector{T},
-    α::AbstractVector{T},
-    dim1::Int
 ) where {T}
+
+    dim1 = Clarabel.dim1(K)
+    α = K.α
 
     if (all(s[1:dim1] .> zero(T)))
         res = zero(T)
         @inbounds for i = 1:dim1
             res += 2*α[i]*logsafe(s[i])
         end
-        res = exp(res) - dot(s[dim1+1:end],s[dim1+1:end])
+        res = exp(res) - sumsq(@view s[dim1+1:end])
         if res > zero(T)
             return true
         end
@@ -314,18 +268,20 @@ function _is_primal_feasible_genpowcone(
 end
 
 # Returns true if z is dual feasible
-function _is_dual_feasible_genpowcone(
+function is_dual_feasible(
+    K::GenPowerCone{T},
     z::AbstractVector{T},
-    α::AbstractVector{T},
-    dim1::Int
 ) where {T}
+
+    dim1 = Clarabel.dim1(K)
+    α = K.α
 
     if (all(z[1:dim1] .> zero(T)))
         res = zero(T)
         @inbounds for i = 1:dim1
             res += 2*α[i]*logsafe(z[i]/α[i])
         end
-        res = exp(res) - dot(z[dim1+1:end],z[dim1+1:end])
+        res = exp(res) - sumsq(@view z[dim1+1:end])
         if res > zero(T)
             return true
         end
@@ -334,34 +290,130 @@ function _is_dual_feasible_genpowcone(
     return false
 end
 
+@inline function barrier_primal(
+    K::GenPowerCone{T},
+    s::AbstractVector{T}, 
+) where {T}
+
+    # Primal barrier: f(s) = ⟨s,g(s)⟩ - f*(-g(s))
+    # NB: ⟨s,g(s)⟩ = -(dim1(K)+1) = - ν
+
+    # can't use "work" here because it was already
+    # used to construct the argument s in some cases
+    g = K.data.work_pb
+
+    gradient_primal!(K,g,s)      
+    g .= -g                 #-g(s)
+
+    return -barrier_dual(K,g) - degree(K)
+end 
+
+
+@inline function barrier_dual(
+    K::GenPowerCone{T},
+    z::AbstractVector{T}, 
+) where {T}
+
+    # Dual barrier
+    α = K.α
+
+    res = zero(T)
+    @inbounds for i = 1:dim1(K)
+        res += 2*α[i]*logsafe(z[i]/α[i])
+    end
+    res = exp(res) - sumsq(@view z[dim1(K)+1:end])
+    barrier = -logsafe(res) 
+    @inbounds for i = 1:dim1(K)
+        barrier -= (one(T)-α[i])*logsafe(z[i])
+    end
+
+    return barrier
+
+end
+
+
+# update gradient and Hessian at dual z = (u,w)
+function update_dual_grad_H(
+    K::GenPowerCone{T},
+    z::AbstractVector{T}
+) where {T}
+    
+    α = K.α
+    data = K.data
+    p = data.p
+    q = data.q
+    r = data.r 
+    d1 = data.d1
+
+    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(2*αi), ζ = ϕ - ||w||^2
+    phi = one(T)
+    @inbounds for i = 1:dim1(K)
+        phi *= (z[i]/α[i])^(2*α[i])
+    end
+    norm2w = sumsq(@view z[dim1(K)+1:end])
+    ζ = phi - norm2w
+    @assert ζ > zero(T)
+
+    # compute the gradient at z
+    grad = data.grad
+    τ = q           # τ shares memory with q
+
+    @inbounds for i = 1:dim1(K)
+        τ[i] = 2*α[i]/z[i]
+        grad[i] = -τ[i]*phi/ζ - (1-α[i])/z[i]
+    end
+    @inbounds for i = (dim1(K)+1):dim(K)
+        grad[i] = 2*z[i]/ζ
+    end
+
+    # compute Hessian information at z 
+    p0 = sqrt(phi*(phi+norm2w)/2)
+    p1 = -2*phi/p0
+    q0 = sqrt(ζ*phi/2)
+    r1 = 2*sqrt(ζ/(phi+norm2w))
+
+    # compute the diagonal d1,d2
+    @inbounds for i = 1:dim1(K)
+        d1[i] = τ[i]*phi/(ζ*z[i]) + (1-α[i])/(z[i]*z[i])
+    end   
+    data.d2 = 2/ζ
+
+    # compute p, q, r where τ shares memory with q
+    p[1:dim1(K)] .= p0*τ/ζ
+    @views p[(dim1(K)+1):end] .= p1*z[(dim1(K)+1):end]/ζ
+
+    q .*= q0/ζ      #τ is abandoned
+    @views r .= r1*z[(dim1(K)+1):end]/ζ
+
+end
+
 # Compute the primal gradient of f(s) at s
 # solve it by the Newton-Raphson method
-function minus_gradient_primal(
+function gradient_primal!(
     K::GenPowerCone{T},
-    s::Union{AbstractVector{T}, NTuple{N,T}},
-    minus_g::Union{AbstractVector{T}, NTuple{N,T}},
-) where {N<:Integer,T}
+    g::AbstractVector{T},
+    s::AbstractVector{T},
+) where {T}
 
     α = K.α
-    dim1 = K.dim1
-    g = minus_g
+    data = K.data
 
-    # unscaled ϕ
-    ϕ = one(T)
-    @inbounds for i = 1:dim1
-        ϕ *= s[i]^(2*α[i])
+    # unscaled phi
+    phi = one(T)
+    @inbounds for i = 1:dim1(K)
+        phi *= s[i]^(2*α[i])
     end
 
 
-    # obtain g3 from the Newton-Raphson method
-    p = @view s[1:dim1]
-    r = @view s[dim1+1:end]
-    gp = @view g[1:dim1]
-    gr = @view g[dim1+1:end]
+    # obtain g1 from the Newton-Raphson method
+    p = @view s[1:dim1(K)]
+    r = @view s[dim1(K)+1:end]
+    gp = @view g[1:dim1(K)]
+    gr = @view g[dim1(K)+1:end]
     norm_r = norm(r)
 
     if norm_r > eps(T)
-        g1 = _newton_raphson_genpowcone(norm_r,dim1,p,ϕ,α,K.ψ)
+        g1 = _newton_raphson_genpowcone(norm_r,p,phi,α,data.ψ)
         @. gr = g1*r/norm_r
         @. gp = -(1+α+α*g1*norm_r)/p
     else
@@ -369,9 +421,11 @@ function minus_gradient_primal(
         @. gp = -(1+α)/p
     end
 
-    g .*= -one(T)    #add the sign to it, i.e. return -g
-
+    return nothing
 end
+
+# ----------------------------------------------
+#  internal operations for generalized power cones
 
 # Newton-Raphson method:
 # solve a one-dimensional equation f(x) = 0
@@ -381,16 +435,14 @@ end
 
 function _newton_raphson_genpowcone(
     norm_r::T,
-    dim::Int,
     p::AbstractVector{T},
-    ϕ::T,
+    phi::T,
     α::AbstractVector{T},
     ψ::T
 ) where {T}
 
     # init point x0: f(x0) > 0
-    dim2 = dim*dim
-    x0 = -one(T)/norm_r + (ψ*norm_r + sqrt((ϕ/norm_r/norm_r + ψ*ψ -1)*ϕ))/(ϕ - norm_r*norm_r)
+    x0 = -one(T)/norm_r + (ψ*norm_r + sqrt((phi/norm_r/norm_r + ψ*ψ - one(T))*phi))/(phi - norm_r*norm_r)
 
     # # additional shift due to the choice of dual barrier
     # t0 = - 2*α*logsafe(α) - 2*(1-α)*logsafe(1-α)   
@@ -398,7 +450,7 @@ function _newton_raphson_genpowcone(
     # function for f(x) = 0
     function f0(x)
         f0 = -logsafe(2*x/norm_r + x*x);
-        @inbounds for i = 1:dim
+        @inbounds for i in eachindex(α)
             f0 += 2*α[i]*(logsafe(x*norm_r+(1+α[i])/α[i]) - logsafe(p[i]))
         end
 
@@ -408,7 +460,7 @@ function _newton_raphson_genpowcone(
     # first derivative
     function f1(x)
         f1 = -(2*x + 2/norm_r)/(x*x + 2*x/norm_r);
-        @inbounds for i = 1:dim
+        @inbounds for i in eachindex(α)
             f1 += 2*α[i]*norm_r/(norm_r*x + (1+α[i])/α[i])
         end
 
@@ -417,150 +469,3 @@ function _newton_raphson_genpowcone(
     
     return _newton_raphson_onesided(x0,f0,f1)
 end
-
-
-# # 3rd-order correction at the point z.  Output is η.
-
-# # 3rd order correction: 
-# # η = -0.5*[(dot(u,Hψ,v)*ψ - 2*dotψu*dotψv)/(ψ*ψ*ψ)*gψ + 
-# #            dotψu/(ψ*ψ)*Hψv + dotψv/(ψ*ψ)*Hψu - 
-# #            dotψuv/ψ + dothuv]
-# # where: 
-# # Hψ = [  2*α*(2*α-1)*ϕ/(z1*z1)     4*α*(1-α)*ϕ/(z1*z2)       0;
-# #         4*α*(1-α)*ϕ/(z1*z2)     2*(1-α)*(1-2*α)*ϕ/(z2*z2)   0;
-# #         0                       0                          -2;]
-# function _higher_correction!(
-#     K::PowerCone{T},
-#     ds::AbstractVector{T},
-#     v::AbstractVector{T}
-# ) where {T}
-
-#     # u for H^{-1}*Δs
-#     H = K.H_dual
-#     z = K.z
-
-#     #solve H*u = ds
-#     cholH = similar(K.H_dual)
-#     issuccess = cholesky_3x3_explicit_factor!(cholH,H)
-#     if issuccess 
-#         u = cholesky_3x3_explicit_solve!(cholH,ds)
-#     else 
-#         return SVector(zero(T),zero(T),zero(T))
-#     end
-
-#     α = K.α
-
-#     ϕ = (z[1]/α)^(2*α)*(z[2]/(1-α))^(2-2*α)
-#     ψ = ϕ - z[3]*z[3]
-
-#     # Reuse cholH memory for further computation
-#     Hψ = cholH
-    
-#     η = similar(K.grad)
-#     η[1] = 2*α*ϕ/z[1]
-#     η[2] = 2*(1-α)*ϕ/z[2]
-#     η[3] = -2*z[3]
-
-#     Hψ[1,1] = 2*α*(2*α-1)*ϕ/(z[1]*z[1])
-#     Hψ[1,2] = 4*α*(1-α)*ϕ/(z[1]*z[2])
-#     Hψ[2,1] = Hψ[1,2]
-#     Hψ[1,3] = 0
-#     Hψ[3,1] = 0
-#     Hψ[2,2] = 2*(1-α)*(1-2*α)*ϕ/(z[2]*z[2])
-#     Hψ[2,3] = 0
-#     Hψ[3,2] = 0
-#     Hψ[3,3] = -2.
-
-#     dotψu = dot(η,u)
-#     dotψv = dot(η,v)
-
-#     Hψv = similar(K.grad)
-#     Hψv[1] = Hψ[1,1]*v[1]+Hψ[1,2]*v[2]
-#     Hψv[2] = Hψ[2,1]*v[1]+Hψ[2,2]*v[2]
-#     Hψv[3] = -2*v[3]
-
-#     coef = (dot(u,Hψv)*ψ - 2*dotψu*dotψv)/(ψ*ψ*ψ)
-#     coef2 = 4*α*(2*α-1)*(1-α)*ϕ*(u[1]/z[1] - u[2]/z[2])*(v[1]/z[1] - v[2]/z[2])/ψ
-#     inv_ψ2 = 1/ψ/ψ
-
-#     η[1] = coef*η[1] - 2*(1-α)*u[1]*v[1]/(z[1]*z[1]*z[1]) + 
-#            coef2/z[1] + Hψv[1]*dotψu*inv_ψ2
-
-#     η[2] = coef*η[2] - 2*α*u[2]*v[2]/(z[2]*z[2]*z[2]) - 
-#            coef2/z[2] + Hψv[2]*dotψu*inv_ψ2
-
-#     η[3] = coef*η[3] + Hψv[3]*dotψu*inv_ψ2
-
-#     # reuse vector Hψv
-#     Hψu = Hψv
-#     Hψu[1] = Hψ[1,1]*u[1]+Hψ[1,2]*u[2]
-#     Hψu[2] = Hψ[2,1]*u[1]+Hψ[2,2]*u[2]
-#     Hψu[3] = -2*u[3]
-
-#     # @. η <= (η + Hψu*dotψv*inv_ψ2)/2
-#     @inbounds for i = 1:3
-#         η[i] = (η[i] + Hψu[i]*dotψv*inv_ψ2)/2
-#     end
-#     # coercing to an SArray means that the MArray we computed 
-#     # locally in this function is seemingly not heap allocated 
-#     SArray(η)
-# end
-
-
-# update gradient and Hessian at dual z = (u,w)
-function _update_dual_grad_H(
-    K::GenPowerCone{T},
-    z::AbstractVector{T}
-) where {T}
-    
-    α = K.α
-    p = K.p
-    q = K.q
-    r = K.r 
-    d1 = K.d1
-
-    dim1 = K.dim1
-    dim = K.dim
-
-    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(2*αi), ζ = ϕ - ||w||^2
-    ϕ = one(T)
-    @inbounds for i = 1:dim1
-        ϕ *= (z[i]/α[i])^(2*α[i])
-    end
-    norm2w = dot(z[dim1+1:end],z[dim1+1:end])
-    ζ = ϕ - norm2w
-    @assert ζ > zero(T)
-
-    # compute the gradient at z
-    grad = K.grad
-    τ = q           # τ shares memory with q
-    @inbounds for i = 1:dim1
-        τ[i] = 2*α[i]/z[i]
-        grad[i] = -τ[i]*ϕ/ζ - (1-α[i])/z[i]
-    end
-    @inbounds for i = dim1+1:dim
-        grad[i] = 2*z[i]/ζ
-    end
-
-    # compute Hessian information at z 
-    p0 = sqrt(ϕ*(ϕ+norm2w)/2)
-    p1 = -2*ϕ/p0
-    q0 = sqrt(ζ*ϕ/2)
-    r1 = 2*sqrt(ζ/(ϕ+norm2w))
-
-    # compute the diagonal d1,d2
-    @inbounds for i = 1:dim1
-        d1[i] = τ[i]*ϕ/(ζ*z[i]) + (1-α[i])/(z[i]*z[i])
-    end   
-    K.d2 = 2/ζ
-
-    # compute p, q, r where τ shares memory with q
-    p[1:dim1] .= p0*τ/ζ
-    p[dim1+1:end] .= p1*z[dim1+1:end]/ζ
-
-    q .*= q0/ζ      #τ is abandoned
-    r .= r1*z[dim1+1:end]/ζ
-    # println("ζ is ", ζ)
-
-end
-

@@ -1,5 +1,6 @@
 using LinearAlgebra, SparseArrays
-using JuMP,Mosek,MosekTools
+using JuMP
+using Mosek,MosekTools
 using JLD,JLD2
 # include(".\\..\\src\\Clarabel.jl")
 using Clarabel
@@ -12,7 +13,7 @@ Maximum volume hypercube} from Hypatia.jl,
 https://github.com/chriscoey/Hypatia.jl/tree/master/examples/maxvolume,
 """
 
-n = 500
+n = 50000
 # ensure there will be a feasible solution
 x = randn(n)
 # A = sparse(Symmetric(sprand(n,n,1.0/n)) + 10I)
@@ -35,25 +36,25 @@ model = Model(Clarabel.Optimizer)
 @variable(model, t)
 @variable(model, x[1:n])
 @objective(model, Max, t)
-@constraint(model, vcat(x,t) in Clarabel.PowerMeanConeT(freq,n))
+@constraint(model, vcat(x,t) in Clarabel.MOI.PowerMeanCone(freq))
 @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
-MOI.set(model, MOI.Silent(), true)      #Diable printing information
+# MOI.set(model, MOI.Silent(), true)      #Diable printing information
 optimize!(model)
 clarabel_val = objective_value(model)
 
 
-#Result from Hypatia
-println("power mean cones via Hypatia")
-model = Model(Hypatia.Optimizer)
-@variable(model, t)
-@variable(model, x[1:n])
-@objective(model, Max, t)
-@constraint(model, vcat(t,x) in Hypatia.HypoPowerMeanCone(freq,false))
-@constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
-@constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
-MOI.set(model, MOI.Silent(), true)
-optimize!(model)
-# println(solution_summary(model))
-hypatia_val = objective_value(model)
-@assert isapprox(clarabel_val,hypatia_val,atol = tol)
+# #Result from Hypatia
+# println("power mean cones via Hypatia")
+# model = Model(Hypatia.Optimizer)
+# @variable(model, t)
+# @variable(model, x[1:n])
+# @objective(model, Max, t)
+# @constraint(model, vcat(t,x) in Hypatia.HypoPowerMeanCone(freq,false))
+# @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
+# @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
+# MOI.set(model, MOI.Silent(), true)
+# optimize!(model)
+# # println(solution_summary(model))
+# hypatia_val = objective_value(model)
+# @assert isapprox(clarabel_val,hypatia_val,atol = tol)

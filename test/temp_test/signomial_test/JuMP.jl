@@ -185,7 +185,7 @@ function clarabel_build(inst::SignomialMinJuMP{T}) where {T <: Float64}
     JuMP.@constraint(model, [k in 1:m, i in 1:n],
         dot(A[notk[k], i] .- A[k, i], V[k, :]) == 0)
     JuMP.@constraint(model, [k in 1:m], vcat(C[k, k] +
-        sum(V[k, :]), C[k, notk[k]], V[k, :]) in Clarabel.EntropyConeT(2m - 1))
+        sum(V[k, :]), C[k, notk[k]], V[k, :]) in Clarabel.MOI.EntropyCone(2m - 1))
 
     return model
 end

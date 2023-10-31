@@ -1,64 +1,31 @@
 # find the maximum step length α≥0 so that
 # q + α*dq stays in an exponential or power
 # cone, or their respective dual cones.
-#
-# NB: Not for use as a general checking
-# function because cone lengths are hardcoded
-# to R^3 for faster execution.  
 
-function _step_length_3d_cone(
-    K::Union{PowerCone{T},ExponentialCone{T}},
+function backtrack_search(
+    ::Union{PowerCone{T},ExponentialCone{T},GenPowerCone{T}},
     dq::AbstractVector{T},
     q::AbstractVector{T},
     α_init::T,
     α_min::T,
-    backtrack::T,
-    is_in_cone_fcn::Function
+    step::T,
+    is_in_cone_fcn::Function,
+    work::Union{AbstractVector{T},NTuple{3,T}},
 ) where {T}
 
-    wq = similar(K.grad)
     α = α_init
+    wq = work
+    
     while true
         #@. wq = q + α*dq
-        @inbounds for i = 1:3
+        @inbounds for i in eachindex(wq)
             wq[i] = q[i] + α*dq[i]
         end
 
         if is_in_cone_fcn(wq)
             break
         end
-        if (α *= backtrack) < α_min
-            α = zero(T)
-            break
-        end
-    end
-    return α
-end
-
-#YC: an extension for _step_length_3d_cone, we could merge two together
-function _step_length_n_cone(
-    K::Union{GenPowerCone{T},EntropyCone{T},PowerMeanCone{T}},
-    dq::AbstractVector{T},
-    q::AbstractVector{T},
-    α_init::T,
-    α_min::T,
-    backtrack::T,
-    is_in_cone_fcn::Function
-) where {T}
-
-    dim = K.dim
-    wq = similar(K.grad)
-    α = α_init
-    while true
-        #@. wq = q + α*dq
-        @inbounds for i = 1:dim
-            wq[i] = q[i] + α*dq[i]
-        end
-
-        if is_in_cone_fcn(wq)
-            break
-        end
-        if (α *= backtrack) < α_min
+        if (α *= step) < α_min
             α = zero(T)
             break
         end
@@ -78,7 +45,7 @@ end
 
 
 # update the scaling matrix Hs
-function _update_Hs(
+function update_Hs(
     K::Union{PowerCone{T},ExponentialCone{T}},
     s::AbstractVector{T},
     z::AbstractVector{T},
@@ -89,17 +56,17 @@ function _update_Hs(
 # Choose the scaling strategy
     if(scaling_strategy == Dual::ScalingStrategy)
         # Dual scaling: Hs = μ*H
-        _use_dual_scaling(K,μ)
+        use_dual_scaling(K,μ)
     else
         # Primal-dual scaling
-        _use_primal_dual_scaling(K,s,z)
+        use_primal_dual_scaling(K,s,z)
     end 
 
 end
 
 
 # use the dual scaling strategy
-function _use_dual_scaling(
+function use_dual_scaling(
     K::Union{PowerCone{T},ExponentialCone{T}},
     μ::T
 ) where {T}
@@ -110,7 +77,7 @@ end
 
 
 # use the primal-dual scaling strategy
-function _use_primal_dual_scaling(
+function use_primal_dual_scaling(
     K::Union{PowerCone{T},ExponentialCone{T}},
     s::AbstractVector{T},
     z::AbstractVector{T}
@@ -118,19 +85,19 @@ function _use_primal_dual_scaling(
 
     (Hs,H_dual) = (K.Hs,K.H_dual)
 
-    st = K.grad
-    δs = similar(st)
-    tmp = similar(st) #shared for δz, tmp, axis_z
+    st  = K.grad
+    δs  = similar(st); δs  .= zero(T)
+    tmp = similar(st); tmp .= zero(T) #shared for δz, tmp, axis_z
 
     # compute zt,st,μt locally
     # NB: zt,st have different sign convention wrt Mosek paper
-    zt = _gradient_primal(K,s)
+    zt = gradient_primal(K,s)
     dot_sz = dot(z,s)
     μ = dot_sz/3
     μt = dot(zt,st)/3
 
     δz = tmp
-    @inbounds for i = 1:3
+    @inbounds for i in eachindex(st)
         δs[i] = s[i] + μ*st[i]
         δz[i] = z[i] + μ*zt[i]
     end    
@@ -140,8 +107,10 @@ function _use_primal_dual_scaling(
     de2 = dot(zt,H_dual,zt) - 3*μt*μt
 
     # use the primal-dual scaling
-    if (abs(de1) > sqrt(eps(T))      # too close to central path
-        && abs(de2) > eps(T) && dot_sz > 0 && dot_δsz > 0)  # for numerical stability
+    if (abs(de1) > sqrt(eps(T)) &&   # too close to central path
+        abs(de2) > eps(T) &&         # for numerical stability
+        dot_sz > zero(T) && 
+        dot_δsz > zero(T))
        
         # compute t
         # tmp = μt*st - H_dual*zt
@@ -185,7 +154,7 @@ function _use_primal_dual_scaling(
         return nothing
     else
         # Hs = μ*H_dual when s,z are on the central path
-        _use_dual_scaling(K,μ)
+        use_dual_scaling(K,μ)
 
         return nothing
     end
@@ -202,8 +171,8 @@ function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
     #left of the true value.   Once a negative step is encountered 
     #this function will halt regardless of the calculated correction.
 
-    x = x0
     iter = 0
+    x = x0
 
     while iter < 100
 
