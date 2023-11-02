@@ -8,6 +8,7 @@ degree(K::EntropyCone{T}) where {T} = 3*K.d
 numel(K::EntropyCone{T}) where {T} = dim(K)
 
 is_symmetric(::EntropyCone{T}) where {T} = false
+allows_primal_dual_scaling(::EntropyCone{T}) where {T} = false
 
 function shift_to_cone!(
     K::EntropyCone{T},
