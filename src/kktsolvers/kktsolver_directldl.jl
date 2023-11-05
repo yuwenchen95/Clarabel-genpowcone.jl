@@ -387,7 +387,7 @@ function  _iterative_refinement(
     isfinite(norme) || return is_success = false 
 
     for i = 1:IR_maxiter
-
+        # println("error is ", norme)
         if(norme <= IR_abstol + IR_reltol*normb)
             # within tolerance, or failed.  Exit
             break

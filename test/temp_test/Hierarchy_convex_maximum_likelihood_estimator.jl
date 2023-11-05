@@ -7,7 +7,9 @@ dist = Exponential(2.0)
 # dist = BetaPrime(1.0,2.0) 
 
 # Generate random samples from the distribution
-n = 1000  # Number of samples
+nbase = 50
+level = 2
+n = nbase^level  # Number of samples
 
 rng = Random.MersenneTwister(1)
 y = rand(rng,dist, n)
@@ -19,6 +21,34 @@ sort!(y)
 # freq = ones(n)+ rand(rng,n)
 freq = ones(n)
 normalize!(freq,1)
+
+#Cascading frequency
+freqTable = Vector{Vector{Float64}}()
+function generate_cascaded_freq(
+    freqTable::Vector{Vector{T}},
+    freq::Vector{T},
+    nbase::Int
+) where {T}
+    push!(freqTable,freq)
+    len = length(freqTable[end])
+    while (len > 1)
+        len = Int(length(freqTable[end])/nbase)
+        prevfreq = freqTable[end]
+        newfreq = zeros(T, len)
+
+        for i in 1:len
+            @views slice = prevfreq[(i-1)*nbase+1:i*nbase]
+            newfreq[i] = sum(slice)
+            @. slice /= newfreq[i]
+        end
+
+        push!(freqTable,newfreq)
+    end
+end
+generate_cascaded_freq(freqTable,deepcopy(freq),nbase)
+
+
+
 
 #Result from Clarabel's generalized power cone
 println("Three-dimensional cones via Mosek")
@@ -72,13 +102,33 @@ xsol = value.(x)
 #Result from Clarabel's generalized power cone
 println("generalized power cones via Clarabel")
 model = Model(Clarabel.Optimizer)
-@variable(model, t)
-@variable(model, x[1:n])
-@objective(model, Max, t)
+total_len = sum(length(a) for a in freqTable)
+@variable(model,x[1:total_len])
+@variable(model,t[1:(total_len-length(freq))])
+@objective(model, Max, t[end])
+@constraint(model,x[length(freq)+1:end] .== t)
 
 using SparseArrays
-At = spdiagm(0 =>[freq; 1.0])
-@constraint(model, At*vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
+start_ind = 0
+start_t = 0
+for (depth,cur_freq) in enumerate(freqTable)
+    cur_len = length(cur_freq)
+
+    if (depth == length(freqTable))
+        break
+    end
+
+    for i in 1:Int(cur_len/nbase)
+        inds = (i-1)*nbase+1:(i*nbase)
+        @views slice = cur_freq[inds]
+        At = spdiagm(0 =>[deepcopy(slice); 1.0])
+        global start_t += 1
+        @constraint(model, At*vcat(x[start_ind .+ (inds)],t[start_t]) in Clarabel.MOI.GenPowerCone(slice,1))
+    end
+
+    global start_ind += cur_len
+end
+
 # @constraint(model, vcat(x,t) in Clarabel.MOI.PowerMeanCone(freq))
 @constraint(model, sum((y[i+1] - y[i])*(x[i] + x[i+1])/2 for i in 1:(n-1)) == 1)
 for i = 1:n-2
@@ -91,7 +141,7 @@ set_optimizer_attribute(model,"up_barrier", 1.0)
 set_optimizer_attribute(model,"low_barrier", 0.5)
 # set_optimizer_attribute(model,"static_regularization_constant",0.0)
 # set_optimizer_attribute(model,"equilibrate_max_iter",100)
-set_optimizer_attribute(model,"min_terminate_step_length", 1e-3)
+set_optimizer_attribute(model,"min_terminate_step_length", 1e-4)
 set_optimizer_attribute(model,"cratio",0.95)
 set_optimizer_attribute(model,"max_iter", 5000)
 # set_optimizer_attribute(model,"barrier", -n-0.5)

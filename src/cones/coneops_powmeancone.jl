@@ -340,7 +340,7 @@ end
     minus_gradient_primal(K,s,minus_g)     #compute g(s)
 
     #YC: need to consider the memory issue later
-    return -barrier_dual(K,minus_g) - degree(K)
+    return -barrier_dual(K,minus_g) #- degree(K)
 end
 
 

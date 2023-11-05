@@ -285,6 +285,12 @@ mutable struct GenPowerConeData{T}
     #work vector exclusively for computing the primal barrier function.   
     work_pb::Vector{T}
 
+
+    #YC: additional values for higher-order correction
+    phi::T
+    ζ::T
+    w2::T
+
     function GenPowerConeData{T}(α::AbstractVector{T},dim2::Int) where {T}
 
         dim1 = length(α)
@@ -303,7 +309,11 @@ mutable struct GenPowerConeData{T}
         work = zeros(T,dim)
         work_pb = zeros(T,dim)
 
-        return new(grad,z,μ,p,q,r,d1,d2,ψ,work,work_pb)
+        phi = zero(T)
+        ζ = zero(T)
+        w2 = zero(T)
+
+        return new(grad,z,μ,p,q,r,d1,d2,ψ,work,work_pb,phi,ζ,w2)
     end
 end
 

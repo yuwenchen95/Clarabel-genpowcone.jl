@@ -120,6 +120,10 @@ Base.@kwdef mutable struct Settings{T <: AbstractFloat}
     #preprocessing 
     presolve_enable::Bool               = true
 
+    #center ratio 
+    cratio::T                              = 1.0
+    up_barrier::T                          = 1.0
+    low_barrier::T                         = 0.5
 end
 
 Settings(args...) = Settings{DefaultFloat}(args...)

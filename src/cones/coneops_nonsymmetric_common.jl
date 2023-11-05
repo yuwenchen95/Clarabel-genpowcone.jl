@@ -187,5 +187,7 @@ function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
         end
         x += dx
     end
+    @assert(iter < 100)
+    
     return x
 end

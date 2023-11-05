@@ -153,6 +153,7 @@ function variables_combined_step_rhs!(
     combined_ds_shift!(cones,d.z,step.z,step.s,dotσμ)
 
     #We are relying on d.s = affine_ds already here
+    affine_ds!(cones, d.s, variables.s)    # asymmetric cones need value of s
     d.s .+= d.z
 
     # now we copy the scaled res for rz and d.z is no longer work
