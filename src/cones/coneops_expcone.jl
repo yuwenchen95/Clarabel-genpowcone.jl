@@ -244,7 +244,7 @@ end
 
     ω = _wright_omega(1-s[1]/s[2]-logsafe(s[2]/s[3]))
     ω = (ω-1)*(ω-1)/ω
-   return -logsafe(ω)-2*logsafe(s[2])-logsafe(s[3]) - 3
+   return -logsafe(ω)-2*logsafe(s[2])-logsafe(s[3]) #- 3
 end 
 
 

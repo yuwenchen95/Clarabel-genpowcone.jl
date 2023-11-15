@@ -7,8 +7,8 @@ dist = Exponential(2.0)
 # dist = BetaPrime(1.0,2.0) 
 
 # Generate random samples from the distribution
-nbase = 50
-level = 2
+nbase = 10
+level = 3
 n = nbase^level  # Number of samples
 
 rng = Random.MersenneTwister(1)
@@ -141,9 +141,13 @@ set_optimizer_attribute(model,"up_barrier", 1.0)
 set_optimizer_attribute(model,"low_barrier", 0.5)
 # set_optimizer_attribute(model,"static_regularization_constant",0.0)
 # set_optimizer_attribute(model,"equilibrate_max_iter",100)
-set_optimizer_attribute(model,"min_terminate_step_length", 1e-4)
+set_optimizer_attribute(model,"min_terminate_step_length", 1e-3)
 set_optimizer_attribute(model,"cratio",0.95)
 set_optimizer_attribute(model,"max_iter", 5000)
+set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
+set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
+set_optimizer_attribute(model,"tol_feas", 1e-7)
+set_optimizer_attribute(model,"tol_ktratio", 1e-5)
 # set_optimizer_attribute(model,"barrier", -n-0.5)
 optimize!(model)
 

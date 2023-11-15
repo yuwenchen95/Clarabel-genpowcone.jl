@@ -277,13 +277,13 @@ mutable struct GenPowerConeData{T}
     #additional scalar terms for rank-2 rep
     d2::T
 
-    #additional constant for initialization in the Newton-Raphson method
-    ψ::T
 
     #work vector length dim, e.g. for line searches
     work::Vector{T}
     #work vector exclusively for computing the primal barrier function.   
     work_pb::Vector{T}
+    #work vector for proximity check
+    work_pp::Vector{T}
 
 
     #YC: additional values for higher-order correction
@@ -304,16 +304,16 @@ mutable struct GenPowerConeData{T}
         r    = zeros(T,dim2)
         d1   = zeros(T,dim1)
         d2   = zero(T)
-        ψ = inv(dot(α,α))
 
         work = zeros(T,dim)
         work_pb = zeros(T,dim)
+        work_pp = zeros(T,dim)
 
         phi = zero(T)
         ζ = zero(T)
         w2 = zero(T)
 
-        return new(grad,z,μ,p,q,r,d1,d2,ψ,work,work_pb,phi,ζ,w2)
+        return new(grad,z,μ,p,q,r,d1,d2,work,work_pb,work_pp,phi,ζ,w2)
     end
 end
 

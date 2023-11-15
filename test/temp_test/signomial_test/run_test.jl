@@ -18,6 +18,6 @@ modelH = Model(Hypatia.Optimizer)
 modelH = build(SignomialMinJuMP{Float64}(m,n),modelH)
 optimize!(modelH)
 
-modelC = Model(Clarabel.Optimizer)
+modelC = Model(Mosek.Optimizer)
 modelC = build(SignomialMinJuMP{Float64}(m,n),modelC)
 optimize!(modelC)

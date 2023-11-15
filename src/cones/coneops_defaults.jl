@@ -246,6 +246,19 @@ function compute_barrier(
 
 end
 
+
+function check_neighbourhood(
+    K::AbstractCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T},  
+    dz::AbstractVector{T},
+    ds::AbstractVector{T},
+    α::T,
+    μ::T
+) where {T}
+    error("Incomplete cone operation specification: ",typeof(K))
+end
+
 # ---------------------------------------------
 # operations supported by symmetric cones only 
 # ---------------------------------------------

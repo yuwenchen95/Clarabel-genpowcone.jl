@@ -158,11 +158,15 @@ function combined_ds_shift!(
     # #3rd order correction requires input variables z
     # and an allocated vector for the correction η
     η = K.data.work_pb
-    μ = K.data.μ
-    higher_correction!(K,η,step_s,step_z)     
 
+    if (all(step_z .== zero(T)))
+        η .= zero(T)
+    else
+        higher_correction_mosek!(K,η,step_s,step_z)  
+    end  
+    # println("Higher order norm: ", norm(η,Inf))
     @inbounds for i = 1:Clarabel.dim(K)
-        shift[i] = K.data.grad[i]*σμ #- μ*η[i]
+        shift[i] = K.data.grad[i]*σμ + η[i]
     end
 
     return nothing
@@ -218,6 +222,7 @@ function compute_barrier(
 
     barrier = zero(T)
     work = K.data.work
+    # tmp = zero(T)
 
     #dual barrier
     @inbounds for i = 1:dim(K)
@@ -228,12 +233,68 @@ function compute_barrier(
     #primal barrier
     @inbounds for i = 1:dim(K)
         work[i] = z[i] + α*dz[i]
+        # tmp += (s[i] + α*ds[i])*(z[i] + α*dz[i])
     end
     barrier += barrier_primal(K, work)
+
+    # μi = tmp/degree(K)
+    # tmp = degree(K)*logsafe(μi) + barrier
+    # println("μi is ", μi, "  barrier is ", tmp)
+    # @assert(tmp > -1e-5)
 
     return barrier
 end
 
+function check_neighbourhood(
+    K::GenPowerCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T},  
+    dz::AbstractVector{T},
+    ds::AbstractVector{T},
+    α::T,
+    μ::T
+) where {T}   
+
+    # #Hypatia neighbourhood
+    # work = K.data.work
+    # @. work = z+α*dz
+    # @. K.data.z = work
+
+    # #Update Hessian and gradient information
+    # update_dual_grad_H(K,work)
+    # work2 = K.data.work_pb
+    # @. work2 = s + α*ds + μ*K.data.grad
+    
+    # Hinv_mul!(K,work,work2)
+    # centrality = sqrt(dot(work,work2))
+
+    # #Outside of the neighbourhood
+    # if centrality > μ
+    #     return false
+    # end
+
+    work = K.data.work
+    @. work = s+α*ds
+    g = K.data.work_pb
+    @. g = z+α*dz
+    # cur_μ = dot(work,g)
+    cur_μ = μ
+
+    #overwrite g with the new gradient
+    gradz = K.data.work_pp
+    gradient_dual!(K,gradz,g)
+    @assert(isapprox(dot(gradz,g),-degree(K)))
+    gradient_primal!(K,g,work) 
+    
+    μt = dot(gradz,g)    
+    neighbourhood = degree(K)/(μt*cur_μ)
+    # println("neighbourhood is ", neighbourhood)
+    if (neighbourhood < 1e-6)
+        return false
+    end
+
+    return true
+end
 
 # ----------------------------------------------
 #  internal operations for generalized power cones
@@ -284,6 +345,7 @@ function is_primal_feasible(
             res += 2*α[i]*logsafe(z[i]/α[i])
         end
         res = exp(res) - sumsq(@view z[dim1+1:end])
+        # println("primal residual is: ", res)
         if res > zero(T)
             return true
         end
@@ -461,7 +523,6 @@ function gradient_primal!(
 ) where {T}
 
     α = K.α
-    data = K.data
 
     # unscaled phi
     phi = zero(T)
@@ -489,6 +550,32 @@ function gradient_primal!(
     return nothing
 end
 
+function gradient_dual!(
+    K::GenPowerCone{T},
+    grad::AbstractVector{T},
+    z::AbstractVector{T}
+) where {T}
+    
+    α = K.α
+
+    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(2*αi), ζ = ϕ - ||w||^2
+    phi = one(T)
+    @inbounds for i = 1:dim1(K)
+        phi *= (z[i])^(2*α[i])
+    end
+    norm2w = sumsq(@view z[dim1(K)+1:end])
+    ζ = phi - norm2w
+    @assert ζ > zero(T)
+
+    # compute the gradient at z
+    @inbounds for i = 1:dim1(K)
+        grad[i] = -2*α[i]*phi/(ζ*z[i]) - (1-α[i])/z[i]
+    end
+    @inbounds for i = (dim1(K)+1):dim(K)
+        grad[i] = 2*z[i]/ζ
+    end
+
+end
 # ----------------------------------------------
 #  internal operations for generalized power cones
 
@@ -585,26 +672,109 @@ function Hinv_mul!(
     x::AbstractVector{T}
 ) where {T}
     α = K.α
+
     grad = K.data.grad
-    work = K.data.work
-    z = K.data.z 
+    z = K.data.z
+    dim1 = Clarabel.dim1(K)
+    u = @view z[1:dim1]
+    w = @view z[dim1+1:end]
     w2 = K.data.w2
-    phi = K.data.phi
+    ϕ = K.data.phi
     ζ = K.data.ζ
-    d1 = dim1(K)
-    d2 = dim2(K)
+
+    @views gradu = grad[1:dim1]
+    @views gradw = grad[dim1+1:end]
+
+    @views yu = y[1:dim1]
+    @views yw = y[dim1+1:end]
+    @views xu = x[1:dim1]
+    @views xw = x[dim1+1:end]
 
     k1 = zero(T)
-    @inbounds for i in 1:d1
+    c1 = zero(T)
+    @inbounds for i in 1:dim1
         k1 += α[i]*α[i]/(grad[i]*z[i])
+        c1 += α[i]*xu[i]/grad[i]
     end
 
-    k2 = (one(T) + w2/phi)/2 + k1*w2/ζ
+    k2 = -(1 + w2/ϕ) - 4*k1*w2/ζ
+    c2 = dot(w,xw)
 
-    @views yu = y[1:d1]
-    @views yw = y[d1+1:end]
-    @views xu = x[1:d1]
-    @views xw = x[d1+1:end]
+    c11 = -4*c1*w2/(k2*ζ) + 2*c2/k2
+    @. yu = -u/gradu*xu + c11*α/gradu
+    @. yw = ζ/2*xw + ((ζ/ϕ+4*k1)*c2/k2 + 2*c1/k2)*w
+    return nothing
+end
 
 
+function higher_correction_mosek!(
+    K::GenPowerCone{T},
+    η::AbstractVector{T},
+    ds::AbstractVector{T},
+    dz::AbstractVector{T}
+) where {T}
+
+    #data.work = H^{-1}*ds
+    Hinv_mul!(K,K.data.work,ds)
+    # tensor product
+    α = K.α
+    dim1 = Clarabel.dim1(K)
+    dim2 = Clarabel.dim2(K)
+
+    du = @view K.data.work[1:dim1]
+    dw = @view K.data.work[dim1+1:end]
+    tu = @view dz[1:dim1]
+    tw = @view dz[dim1+1:end]
+
+    z = K.data.z
+    u = @view z[1:dim1]
+    w = @view z[dim1+1:end]
+
+    #workspace
+    τ = similar(u)
+    @. τ = 2*α/u
+    normd = similar(u)
+    @. normd = du/u
+
+    #constants
+    ϕ = K.data.phi
+    ζ = K.data.ζ
+    ϕdζ = ϕ/ζ
+    τdu = dot(τ,du)
+    wdw = dot(w,dw)
+    τtu = dot(τ,tu)
+    wtw = dot(w,tw)
+    dtw = dot(dw,tw)
+    c0 = zero(T)
+    @inbounds for i in 1:dim1
+        c0 += τ[i]*normd[i]*tu[i]
+    end
+
+    #search direction
+    diru = @view  η[1:dim1]
+    dirw = @view  η[dim1+1:end]
+
+    #constant 
+    cu1 = ϕdζ*(2*ϕdζ-1)*((1-ϕdζ)*τdu*τtu + 2/ζ*(wdw*τtu + τdu*wtw)) - 2*ϕdζ/ζ*(4*wdw*wtw/ζ + dtw) + ϕdζ*(1-ϕdζ)*c0
+    cud = 2*ϕdζ*wtw/ζ + ϕdζ*(1-ϕdζ)*τtu
+    cut = 2*ϕdζ*wdw/ζ + ϕdζ*(1-ϕdζ)*τdu
+
+    @inbounds for i in 1:dim1
+        diru[i] = cu1 + (cud*du[i] + cut*tu[i])/u[i]
+    end
+    @. diru  *= τ
+    @inbounds for i in 1:dim1
+        diru[i] -= 2*du[i]*tu[i]*((1-α[i])/u[i]+τ[i]*ϕdζ)/(u[i]*u[i])
+    end
+    
+    cw1 = 2*ϕ*((2ϕdζ-1)*τdu*τtu + c0 - 4/ζ*(wdw*τtu+τdu*wtw)) + (16*wdw*wtw/ζ + 4*dtw)
+    cwd = 4*wtw - 2*ϕ*τtu
+    cwt = 4*wdw - 2*ϕ*τdu
+    @inbounds for i in 1:dim2
+        dirw[i] = (cw1*w[i] + (cwd*dw[i]+cwt*tw[i]))/(ζ*ζ) 
+    end
+
+    @. η /= -2
+    
+    return nothing
 end

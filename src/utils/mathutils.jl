@@ -13,6 +13,7 @@ end
 
 @inline function logsafe(v::T) where {T<:Real}
     if v < 0
+        error("can't happen")
         return -typemax(T)
     else 
         return log(v)

@@ -180,8 +180,8 @@ function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
         dfdx  =  f1(x)  
         dx    = -f0(x)/dfdx
 
-        if (dx < eps(T)) ||
-            (abs(dx/x) < sqrt(eps(T))) ||
+        if (abs(dx) < eps(T)) ||
+            (abs(dx/x) < eps(T)) ||
             (abs(dfdx) < eps(T))
             break
         end

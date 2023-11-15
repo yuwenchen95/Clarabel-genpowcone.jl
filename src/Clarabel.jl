@@ -93,15 +93,15 @@ module Clarabel
     const Optimizer{T} = Clarabel.MOIwrapper.Optimizer{T}
 
 
-    #precompile minimal MOI / native examples
-    using SnoopPrecompile
-    include("./precompile.jl")
-    redirect_stdout(devnull) do; 
-        SnoopPrecompile.@precompile_all_calls begin
-            __precompile_native()
-            __precompile_moi()
-        end
-    end
-    __precompile_printfcns()
+    # #precompile minimal MOI / native examples
+    # using SnoopPrecompile
+    # include("./precompile.jl")
+    # redirect_stdout(devnull) do; 
+    #     SnoopPrecompile.@precompile_all_calls begin
+    #         __precompile_native()
+    #         __precompile_moi()
+    #     end
+    # end
+    # __precompile_printfcns()
 
 end #end module

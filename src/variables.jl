@@ -71,6 +71,30 @@ function variables_barrier(
     return barrier
 end
 
+function centrality_check_mosek(
+    variables::DefaultVariables{T},
+    step::DefaultVariables{T},
+    α::T,
+    cones::CompositeCone{T},
+) where {T}
+
+    central_coef = cones.degree + 1
+
+    cur_τ = variables.τ + α*step.τ
+    cur_κ = variables.κ + α*step.κ
+
+    # compute current μ
+    sz = dot_shifted(variables.z,variables.s,step.z,step.s,α)
+    μ = (sz + cur_τ*cur_κ)/central_coef
+
+    ( z, s) = (variables.z, variables.s)
+    (dz,ds) = (step.z, step.s)
+
+    centrality = check_neighbourhood(cones, z, s, dz, ds, α, μ)
+
+    return centrality
+end
+
 function variables_copy_from(dest::DefaultVariables{T},src::DefaultVariables{T}) where {T}
     dest.x .= src.x
     dest.s .= src.s
@@ -129,7 +153,7 @@ function variables_combined_step_rhs!(
     step::DefaultVariables{T},
     σ::T,
     μ::T,
-    m::T,
+    m::T
 ) where {T}
 
     dotσμ = σ*μ

@@ -210,9 +210,44 @@ function compute_barrier(
     barrier += barrier_dual(K, cur_z)
     barrier += barrier_primal(K, cur_s)
 
+    # tmp = 3*logsafe(dot(cur_z,cur_s)/3) + barrier
+    # @assert(tmp > -sqrt(eps(T)))
+
     return barrier
 end
 
+function check_neighbourhood(
+    K::PowerCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T},  
+    dz::AbstractVector{T},
+    ds::AbstractVector{T},
+    α::T,
+    μ::T
+) where {T}   
+
+    work = similar(K.grad) 
+    work .= zero(T)
+    @. work = s+α*ds
+    g = similar(K.grad) 
+    g .= zero(T)
+    @. g = z+α*dz
+    cur_μ = dot(work,g)
+    cur_μ = μ
+
+    #overwrite g with the new gradient
+    gradz = gradient_dual!(K,g)
+    grads = gradient_primal(K,work) 
+    
+    μt = dot(gradz,grads)    
+    neighbourhood = degree(K)/(μt*cur_μ)
+    # println("neighbourhood is ", neighbourhood)
+    if (neighbourhood < 1e-6)
+        return false
+    end
+
+    return true
+end
 
 # ----------------------------------------------
 #  nonsymmetric cone operations for power cones
@@ -232,7 +267,7 @@ end
 
     # Dual barrier
     α = K.α
-    return -logsafe((z[1]/α)^(2*α) * (z[2]/(1-α))^(2-2*α) - z[3]*z[3]) - (1-α)*logsafe(z[1]) - α*logsafe(z[2])
+    return -logsafe(exp(2*α*logsafe(z[1]/α) + (2-2*α)*logsafe(z[2]/(1-α))) - z[3]*z[3]) - (1-α)*logsafe(z[1]) - α*logsafe(z[2])
 
 end
 
@@ -247,7 +282,8 @@ end
     α = K.α
 
     g = gradient_primal(K,s)     #compute g(s)
-    return logsafe((-g[1]/α)^(2*α) * (-g[2]/(1-α))^(2-2*α) - g[3]*g[3]) + (1-α)*logsafe(-g[1]) + α*logsafe(-g[2]) - 3
+    @assert(isapprox(dot(g,s),-3))
+    return logsafe(exp(2*α*logsafe(-g[1]/α) + (2-2*α)*logsafe(-g[2]/(1-α)))  - g[3]*g[3]) + (1-α)*logsafe(-g[1]) + α*logsafe(-g[2]) #- 3
 end 
 
 
@@ -315,6 +351,25 @@ function gradient_primal(
 
 end
 
+function gradient_dual!(
+    K::PowerCone{T},
+    z::AbstractVector{T}
+) where {T}
+
+    α = K.α
+
+    ϕ = (z[1]/α)^(2*α)*(z[2]/(1-α))^(2-2*α)
+    ψ = ϕ - z[3]*z[3]
+
+    # compute the gradient at z
+    grad = similar(K.grad)
+    grad .= zero(T)
+    grad[1] = -2*α*ϕ/(z[1]*ψ) - (1-α)/z[1]
+    grad[2] = -2*(1-α)*ϕ/(z[2]*ψ) - α/z[2]
+    grad[3] = 2*z[3]/ψ
+
+    return SVector(grad)
+end
 
 # 3rd-order correction at the point z.  Output is η.
 

@@ -171,6 +171,7 @@ function solve!(
     σ = one(T) 
     α = zero(T)
     μ = typemax(T)
+    m = one(T)
 
     # solver release info, solver config
     # problem dimensions, cone type etc
@@ -198,6 +199,7 @@ function solve!(
 
         while true
 
+            # variables_rescale!(s.variables)
             #update the residuals
             #--------------
             residuals_update!(s.residuals,s.variables,s.data)
@@ -252,13 +254,13 @@ function solve!(
             is_kkt_solve_success = kkt_update!(s.kktsystem,s.data,s.cones)
             end
 
-            #barrier 
-            if (scaling == Dual)
-                barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
-                # println("barrier is ", barrier)
-            end
+            # #barrier 
+            # barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
+            # println("barrier is ", barrier)
             
-            if (scaling == Dual && barrier > s.settings.low_barrier)
+            s.info.add_barrier = 0.0#1000*exp(-iter/2)
+            
+            if (scaling == Dual && barrier > s.settings.low_barrier + s.info.add_barrier)
                 #centering only, without the affine (predictor) step
                 #YC: no higher order correction at the moment
                 # println("centering only!")
@@ -267,7 +269,7 @@ function solve!(
                 s.step_lhs.x .= zero(T)
                 s.step_lhs.z.vec .= zero(T)
                 s.step_lhs.s.vec .= zero(T)
-                # println("only correction")
+                println("only correction at barrier: ", barrier)
             else
                 #calculate the affine step
                 #--------------
@@ -288,13 +290,13 @@ function solve!(
             # combined step only on affine step success 
             if is_kkt_solve_success
 
-                if (scaling == Dual && barrier > s.settings.low_barrier)
+                if (scaling == Dual && barrier > s.settings.low_barrier + s.info.add_barrier)
                     #centering only, without the affine (predictor) step
                     α = zero(T)
                     σ = s.settings.cratio
                 else
-                    #calculate step length and centering parameter
-                    #--------------
+                    # calculate step length and centering parameter
+                    # --------------
                     α = solver_get_step_length(s,:affine,scaling)
                     σ = _calc_centering_parameter(α)
                 end
@@ -302,7 +304,7 @@ function solve!(
                 #make a reduced Mehrotra correction in the first iteration
                 #to accommodate badly centred starting points
                 m = iter > 1 ? one(T) : α;
-                m = α;
+                # m = α;
 
                 #calculate the combined step and length
                 #--------------
@@ -333,6 +335,32 @@ function solve!(
             #compute final step length and update the current iterate
             #--------------
             α = solver_get_step_length(s,:combined,scaling)
+
+            if (α < s.settings.min_terminate_step_length && scaling == Dual)
+                s.step_lhs.τ = zero(T)
+                s.step_lhs.κ = zero(T)
+                s.step_lhs.x .= zero(T)
+                s.step_lhs.z.vec .= zero(T)
+                s.step_lhs.s.vec .= zero(T)
+                println("only correction at step: ", α)
+                α = zero(T)
+                σ = s.settings.cratio
+
+                variables_combined_step_rhs!(
+                    s.step_rhs, s.residuals,
+                    s.variables, s.cones,
+                    s.step_lhs, σ, μ, m
+                )
+
+                @timeit s.timers "kkt solve" begin
+                is_kkt_solve_success =
+                    kkt_solve!(
+                        s.kktsystem, s.step_lhs, s.step_rhs,
+                        s.data, s.variables, s.cones, :combined
+                    )
+                end
+                α = solver_get_step_length(s,:combined,scaling)
+            end
 
             # check for undersized step and update strategy
             (action,scaling) = _strategy_checkpoint_small_step(s, α, scaling)
@@ -402,10 +430,17 @@ function solver_get_step_length(s::Solver{T},steptype::Symbol,scaling::ScalingSt
         s.cones, s.settings, steptype
     )
 
+    println("step after feasibility check ", α)
+
     # additional barrier function limits for asymmetric cones
     if (!is_symmetric(s.cones) && steptype == :combined && scaling == Dual)
         αinit = α
-        α = solver_backtrack_step_to_barrier(s,αinit)
+
+        # if allows_primal_dual_scaling(s.cones)
+            α = solver_backtrack_step_to_barrier(s,αinit)
+        # else
+            # α = solver_backtrack_step_to_centrality(s,αinit)
+        # end
     end
     return α
 end
@@ -424,7 +459,7 @@ function solver_backtrack_step_to_barrier(
     for j = 1:50
         barrier = variables_barrier(s.variables,s.step_lhs,α,s.cones)
         # println("barrier is: ", barrier)
-        if barrier < s.settings.up_barrier
+        if barrier < s.settings.up_barrier + s.info.add_barrier
             return α
         else
             if (α *= step) < α_min
@@ -437,11 +472,36 @@ function solver_backtrack_step_to_barrier(
     return α
 end
 
+# check the distance to the boundary for asymmetric cones
+function solver_backtrack_step_to_centrality(
+    s::Solver{T}, αinit::T
+) where {T}
+
+    step = s.settings.linesearch_backtrack_step
+    α_min = s.settings.min_terminate_step_length
+
+    α = αinit
+
+    for j = 1:50
+        centrality = centrality_check_mosek(s.variables,s.step_lhs,α,s.cones) 
+        # println("barrier is: ", barrier)
+        if centrality
+            return α
+        else
+            if (α *= step) < α_min
+                α = zero(T)
+                break
+            end
+        end
+    end
+
+    return α
+end
 
 # Mehrotra heuristic
 function _calc_centering_parameter(α::T) where{T}
 
-    return σ = (1-α)^3
+    return σ = (1-α)^3#*min((1-α)^2,0.25)
 end
 
 

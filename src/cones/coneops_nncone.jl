@@ -179,13 +179,43 @@ function compute_barrier(
 ) where {T}
 
     barrier = T(0)
+    # tmp = zero(T)
     @inbounds for i = 1:K.dim
         si = s[i] + α*ds[i]
         zi = z[i] + α*dz[i]
+        # tmp += si*zi
         barrier -= logsafe(si * zi)
     end
 
+    # μi = tmp/K.dim
+    # tmp = K.dim*logsafe(μi) + barrier
+    # println("NN μi is ", μi, "  barrier is ", tmp)
+
     return barrier
+end
+
+function check_neighbourhood(
+    K::NonnegativeCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T},  
+    dz::AbstractVector{T},
+    ds::AbstractVector{T},
+    α::T,
+    μ::T
+) where {T}
+
+    μt = zero(T)
+    @inbounds for i in 1:K.dim
+        μt += inv((z[i]+α*dz[i])*(s[i]+α*ds[i]))    
+    end
+
+    neighbourhood = degree(K)/(μt*μ)
+    # println("neighbourhood is ", neighbourhood)
+    if (neighbourhood < 1e-6)
+        return false
+    end
+
+    return true
 end
 
 # ---------------------------------------------
