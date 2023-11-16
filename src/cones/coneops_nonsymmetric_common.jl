@@ -167,27 +167,31 @@ end
 #------------------------------------------------------------
 function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
 
-    #implements NR method from a starting point assumed to be to the 
-    #left of the true value.   Once a negative step is encountered 
-    #this function will halt regardless of the calculated correction.
+    #implements NR method from a starting point assumed to converge quadratically
 
     iter = 0
     x = x0
+    thr = 1e-12#sqrt(eps(T))     
 
     while iter < 100
 
         iter += 1
         dfdx  =  f1(x)  
-        dx    = -f0(x)/dfdx
+        fval = f0(x)
+        dx    = -fval/dfdx
 
-        if (abs(dx) < eps(T)) ||
-            (abs(dx/x) < eps(T)) ||
-            (abs(dfdx) < eps(T))
+        # println("iter ", iter, "  f0 is ", f0(x), "  and f1 is ", f1(x))
+
+        #Either the function value or the move is small enough
+        if (abs(fval) < thr) || (abs(dx/x) < thr)|| (abs(dx) < thr)
             break
         end
         x += dx
     end
+
     @assert(iter < 100)
-    
+    # println("iter ", iter, "  f0 is ", f0(x))
+    @assert(abs(f0(x)) < sqrt(eps(T)))
+
     return x
 end

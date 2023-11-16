@@ -45,65 +45,65 @@ set_optimizer_attribute(model,"MSK_IPAR_PRESOLVE_USE",false)
 optimize!(model)
 xsol = value.(x)
 
-#Result from Clarabel's generalized power cone
-println("Three-dimensional cones via Clarabel")
-model = Model(Clarabel.Optimizer)
-@variable(model, x[1:n])
-@variable(model,z[1:n-1])
-@variable(model,r[1:n-2])
-@objective(model, Max, z[end])
-# trnasform a general power cone into a product of three-dimensional power cones
-power = freq[1] + freq[2]
-@constraint(model, vcat(x[2],x[1],z[1]) in MOI.PowerCone(freq[2]/power))
-for i = 1:n-2
-    global power += freq[i+2]
-    @constraint(model, r[i] == z[i])
-    @constraint(model, vcat(x[i+2],r[i],z[i+1]) in MOI.PowerCone(freq[i+2]/power))
-end
-@constraint(model, sum((y[i+1] - y[i])*(x[i] + x[i+1])/2 for i in 1:(n-1)) == 1)
-for i = 1:n-2
-    @constraint(model, (x[i+1]-x[i])/(y[i+1]-y[i]) - (x[i+2]-x[i+1])/(y[i+2]-y[i+1])<= 0)
-end
-@constraint(model, x .>= 0)
-# MOI.set(model, MOI.Silent(), true)      #Disable printing information
-set_optimizer_attribute(model,"min_switch_step_length",0.1)
-# set_optimizer_attribute(model,"linesearch_backtrack_step",0.9)
-set_optimizer_attribute(model,"max_iter", 500)
-optimize!(model)
-
 # #Result from Clarabel's generalized power cone
-# println("generalized power cones via Clarabel")
+# println("Three-dimensional cones via Clarabel")
 # model = Model(Clarabel.Optimizer)
-# @variable(model, t)
 # @variable(model, x[1:n])
-# @objective(model, Max, t)
-
-# using SparseArrays
-# At = spdiagm(0 =>[freq; 1.0])
-# @constraint(model, At*vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
-# # @constraint(model, vcat(x,t) in Clarabel.MOI.PowerMeanCone(freq))
+# @variable(model,z[1:n-1])
+# @variable(model,r[1:n-2])
+# @objective(model, Max, z[end])
+# # trnasform a general power cone into a product of three-dimensional power cones
+# power = freq[1] + freq[2]
+# @constraint(model, vcat(x[2],x[1],z[1]) in MOI.PowerCone(freq[2]/power))
+# for i = 1:n-2
+#     global power += freq[i+2]
+#     @constraint(model, r[i] == z[i])
+#     @constraint(model, vcat(x[i+2],r[i],z[i+1]) in MOI.PowerCone(freq[i+2]/power))
+# end
 # @constraint(model, sum((y[i+1] - y[i])*(x[i] + x[i+1])/2 for i in 1:(n-1)) == 1)
 # for i = 1:n-2
 #     @constraint(model, (x[i+1]-x[i])/(y[i+1]-y[i]) - (x[i+2]-x[i+1])/(y[i+2]-y[i+1])<= 0)
 # end
 # @constraint(model, x .>= 0)
-
-# # set_optimizer_attribute(model,"equilibrate_enable",false)
-# set_optimizer_attribute(model,"up_barrier", 1.0)
-# set_optimizer_attribute(model,"low_barrier", 0.5)
-# # set_optimizer_attribute(model,"static_regularization_constant",0.0)
-# set_optimizer_attribute(model,"min_terminate_step_length", 1e-3)
-# set_optimizer_attribute(model,"cratio",0.95)
-# set_optimizer_attribute(model,"max_iter", 5000)
-# # set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
-# # set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
-# # set_optimizer_attribute(model,"tol_feas", 1e-7)
-# # set_optimizer_attribute(model,"tol_ktratio", 1e-5)
-# set_optimizer_attribute(model,"equilibrate_max_iter",10)
-# set_optimizer_attribute(model,"equilibrate_min_scaling",1e-2)
-# set_optimizer_attribute(model,"equilibrate_max_scaling",1e2)
-# # set_optimizer_attribute(model,"barrier", -n-0.5)
+# # MOI.set(model, MOI.Silent(), true)      #Disable printing information
+# set_optimizer_attribute(model,"min_switch_step_length",0.1)
+# # set_optimizer_attribute(model,"linesearch_backtrack_step",0.9)
+# set_optimizer_attribute(model,"max_iter", 500)
 # optimize!(model)
+
+#Result from Clarabel's generalized power cone
+println("generalized power cones via Clarabel")
+model = Model(Clarabel.Optimizer)
+@variable(model, t)
+@variable(model, x[1:n])
+@objective(model, Max, t)
+
+using SparseArrays
+At = spdiagm(0 =>[freq; 1.0])
+@constraint(model, At*vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
+# @constraint(model, vcat(x,t) in Clarabel.MOI.PowerMeanCone(freq))
+@constraint(model, sum((y[i+1] - y[i])*(x[i] + x[i+1])/2 for i in 1:(n-1)) == 1)
+for i = 1:n-2
+    @constraint(model, (x[i+1]-x[i])/(y[i+1]-y[i]) - (x[i+2]-x[i+1])/(y[i+2]-y[i+1])<= 0)
+end
+@constraint(model, x .>= 0)
+
+# set_optimizer_attribute(model,"equilibrate_enable",false)
+set_optimizer_attribute(model,"up_barrier", 1.0)
+set_optimizer_attribute(model,"low_barrier", 0.5)
+# set_optimizer_attribute(model,"static_regularization_constant",0.0)
+set_optimizer_attribute(model,"min_terminate_step_length", 1e-3)
+set_optimizer_attribute(model,"cratio",0.95)
+set_optimizer_attribute(model,"max_iter", 5000)
+# set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
+# set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
+# set_optimizer_attribute(model,"tol_feas", 1e-7)
+# set_optimizer_attribute(model,"tol_ktratio", 1e-5)
+set_optimizer_attribute(model,"equilibrate_max_iter",10)
+set_optimizer_attribute(model,"equilibrate_min_scaling",1e-2)
+set_optimizer_attribute(model,"equilibrate_max_scaling",1e2)
+# set_optimizer_attribute(model,"barrier", -n-0.5)
+optimize!(model)
 
 solver = model.moi_backend.optimizer.model.optimizer.solver
 

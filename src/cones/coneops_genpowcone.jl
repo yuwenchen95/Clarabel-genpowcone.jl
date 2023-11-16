@@ -283,7 +283,7 @@ function check_neighbourhood(
     #overwrite g with the new gradient
     gradz = K.data.work_pp
     gradient_dual!(K,gradz,g)
-    @assert(isapprox(dot(gradz,g),-degree(K)))
+    # @assert(isapprox(dot(gradz,g),-degree(K)))
     gradient_primal!(K,g,work) 
     
     μt = dot(gradz,g)    

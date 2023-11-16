@@ -282,7 +282,7 @@ end
     α = K.α
 
     g = gradient_primal(K,s)     #compute g(s)
-    @assert(isapprox(dot(g,s),-3))
+    # @assert(isapprox(dot(g,s),-3))
     return logsafe(exp(2*α*logsafe(-g[1]/α) + (2-2*α)*logsafe(-g[2]/(1-α)))  - g[3]*g[3]) + (1-α)*logsafe(-g[1]) + α*logsafe(-g[2]) #- 3
 end 
 

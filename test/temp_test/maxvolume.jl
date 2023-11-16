@@ -14,7 +14,7 @@ Maximum volume hypercube} from Hypatia.jl,
 https://github.com/chriscoey/Hypatia.jl/tree/master/examples/maxvolume,
 """
 
-n = 5000
+n = 500
 rng = Random.MersenneTwister(1)
 # ensure there will be a feasible solution
 x = randn(rng,n)
@@ -52,52 +52,52 @@ optimize!(model)
 opt_val = objective_value(model)
 psol = value.(p)
 
-#Result from Clarabel's generalized power cone
-println("Three-dimensional cones via Clarabel")
-model = Model(Clarabel.Optimizer)
-@variable(model, x[1:n])
-@variable(model,z[1:n-1])
-@objective(model, Max, z[end])
-# trnasform a general power cone into a product of three-dimensional power cones
-power = freq[1] + freq[2]
-@constraint(model, vcat(x[2],x[1],z[1]) in MOI.PowerCone(freq[2]/power))
-for i = 1:n-2
-    global power += freq[i+2]
-    @constraint(model, vcat(x[i+2],z[i],z[i+1]) in MOI.PowerCone(freq[i+2]/power))
-end
-# @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
-@constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
-@constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
-
-# MOI.set(model, MOI.Silent(), true)      #Disable printing information
-optimize!(model)
-# @assert isapprox(opt_val,objective_value(model),atol = tol)
-
 # #Result from Clarabel's generalized power cone
-# println("generalized power cones via Clarabel")
+# println("Three-dimensional cones via Clarabel")
 # model = Model(Clarabel.Optimizer)
-# @variable(model, t)
 # @variable(model, x[1:n])
-# @objective(model, Max, t)
-# At = spdiagm(0 =>[freq; 1.0])
-# @constraint(model, At*vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
+# @variable(model,z[1:n-1])
+# @objective(model, Max, z[end])
+# # trnasform a general power cone into a product of three-dimensional power cones
+# power = freq[1] + freq[2]
+# @constraint(model, vcat(x[2],x[1],z[1]) in MOI.PowerCone(freq[2]/power))
+# for i = 1:n-2
+#     global power += freq[i+2]
+#     @constraint(model, vcat(x[i+2],z[i],z[i+1]) in MOI.PowerCone(freq[i+2]/power))
+# end
 # # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
 # @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
 # @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
+
 # # MOI.set(model, MOI.Silent(), true)      #Disable printing information
-# set_optimizer_attribute(model,"cratio",0.95)
-# set_optimizer_attribute(model,"max_iter",2000)
-# set_optimizer_attribute(model,"up_barrier", 1)
-# set_optimizer_attribute(model,"low_barrier", 1.0)
-# set_optimizer_attribute(model,"min_switch_step_length",0.01)
-# set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
-# set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
-# set_optimizer_attribute(model,"tol_feas", 1e-7)
-# set_optimizer_attribute(model,"tol_ktratio", 1e-5)
 # optimize!(model)
-# @assert isapprox(opt_val,objective_value(model),atol = tol)
-# solver = model.moi_backend.optimizer.model.optimizer.solver
-# xsol = value.(x)
+# # @assert isapprox(opt_val,objective_value(model),atol = tol)
+
+#Result from Clarabel's generalized power cone
+println("generalized power cones via Clarabel")
+model = Model(Clarabel.Optimizer)
+@variable(model, t)
+@variable(model, x[1:n])
+@objective(model, Max, t)
+At = spdiagm(0 =>[freq; 1.0])
+@constraint(model, At*vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
+# @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
+@constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
+@constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
+# MOI.set(model, MOI.Silent(), true)      #Disable printing information
+set_optimizer_attribute(model,"cratio",0.95)
+set_optimizer_attribute(model,"max_iter",2000)
+set_optimizer_attribute(model,"up_barrier", 1)
+set_optimizer_attribute(model,"low_barrier", 1.0)
+set_optimizer_attribute(model,"min_switch_step_length",0.1)
+set_optimizer_attribute(model,"tol_gap_abs", 1e-6)
+set_optimizer_attribute(model,"tol_gap_rel", 1e-6)
+set_optimizer_attribute(model,"tol_feas", 1e-6)
+set_optimizer_attribute(model,"tol_ktratio", 1e-4)
+optimize!(model)
+@assert isapprox(opt_val,objective_value(model),atol = tol)
+solver = model.moi_backend.optimizer.model.optimizer.solver
+xsol = value.(x)
 
 # #Use different precision
 # T = BigFloat
