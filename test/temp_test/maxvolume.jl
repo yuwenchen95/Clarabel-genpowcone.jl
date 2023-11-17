@@ -95,7 +95,7 @@ set_optimizer_attribute(model,"tol_gap_rel", 1e-6)
 set_optimizer_attribute(model,"tol_feas", 1e-6)
 set_optimizer_attribute(model,"tol_ktratio", 1e-4)
 optimize!(model)
-@assert isapprox(opt_val,objective_value(model),atol = tol)
+@assert isapprox(opt_val,objective_value(model),atol = 1e-4)
 solver = model.moi_backend.optimizer.model.optimizer.solver
 xsol = value.(x)
 

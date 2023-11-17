@@ -265,7 +265,7 @@ function check_neighbourhood(
     # work2 = K.data.work_pb
     # @. work2 = s + α*ds + μ*K.data.grad
     
-    # Hinv_mul!(K,work,work2)
+    # mul_Hinv!(K,work,work2)
     # centrality = sqrt(dot(work,work2))
 
     # #Outside of the neighbourhood
@@ -666,7 +666,7 @@ end
 # Unfinished
 ####################################
 #H^{-1}*x 
-function Hinv_mul!(
+function mul_Hinv!(
     K::GenPowerCone{T},
     y::AbstractVector{T},
     x::AbstractVector{T}
@@ -715,7 +715,7 @@ function higher_correction_mosek!(
 ) where {T}
 
     #data.work = H^{-1}*ds
-    Hinv_mul!(K,K.data.work,ds)
+    mul_Hinv!(K,K.data.work,ds)
     # tensor product
     α = K.α
     dim1 = Clarabel.dim1(K)
