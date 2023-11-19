@@ -254,9 +254,9 @@ function solve!(
             is_kkt_solve_success = kkt_update!(s.kktsystem,s.data,s.cones)
             end
 
-            #barrier 
-            barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
-            println("barrier is ", barrier)
+            # #barrier 
+            # barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
+            # println("barrier is ", barrier)
             
             s.info.add_barrier = 0.0#1000*exp(-iter/2)
             
@@ -430,7 +430,7 @@ function solver_get_step_length(s::Solver{T},steptype::Symbol,scaling::ScalingSt
         s.cones, s.settings, steptype
     )
 
-    println("step after feasibility check ", α)
+    # println("step after feasibility check ", α)
 
     # additional barrier function limits for asymmetric cones
     if (!is_symmetric(s.cones) && steptype == :combined && scaling == Dual)

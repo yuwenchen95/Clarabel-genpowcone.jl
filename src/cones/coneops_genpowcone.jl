@@ -164,7 +164,7 @@ function combined_ds_shift!(
     else
         higher_correction_mosek!(K,η,step_s,step_z)  
     end  
-    # println("Higher order norm: ", norm(η,Inf))
+    println("Higher order norm: ", norm(η,Inf))
     @inbounds for i = 1:Clarabel.dim(K)
         shift[i] = K.data.grad[i]*σμ + η[i]
     end
@@ -228,14 +228,14 @@ function compute_barrier(
     @inbounds for i = 1:dim(K)
         work[i] = s[i] + α*ds[i]
     end
-    barrier += barrier_dual(K, work)
+    barrier += barrier_primal(K, work)
 
     #primal barrier
     @inbounds for i = 1:dim(K)
         work[i] = z[i] + α*dz[i]
         # tmp += (s[i] + α*ds[i])*(z[i] + α*dz[i])
     end
-    barrier += barrier_primal(K, work)
+    barrier += barrier_dual(K, work)
 
     # μi = tmp/degree(K)
     # tmp = degree(K)*logsafe(μi) + barrier
@@ -307,7 +307,7 @@ end
 # and stores the result at g
 
 
-# Returns true if s is primal feasible
+# Returns true if z is dual feasible
 function is_dual_feasible(
     K::GenPowerCone{T},
     s::AbstractVector{T},
@@ -317,10 +317,7 @@ function is_dual_feasible(
     α = K.α
 
     if (all(s[1:dim1] .> zero(T)))
-        res = zero(T)
-        @inbounds for i = 1:dim1
-            res += 2*α[i]*logsafe(s[i])
-        end
+        @views res = mapreduce((i,j)->2*i*logsafe(j),+,α,s[1:dim1])
         res = exp(res) - sumsq(@view s[dim1+1:end])
         if res > zero(T)
             return true
@@ -330,7 +327,7 @@ function is_dual_feasible(
     return false
 end
 
-# Returns true if z is dual feasible
+# Returns true if s is primal feasible
 function is_primal_feasible(
     K::GenPowerCone{T},
     z::AbstractVector{T},
@@ -345,6 +342,7 @@ function is_primal_feasible(
             res += 2*α[i]*logsafe(z[i]/α[i])
         end
         res = exp(res) - sumsq(@view z[dim1+1:end])
+        # res = mapreduce((i,j)->2*i*logsafe(j/i),+,α,(@view z[1:dim1]))
         # println("primal residual is: ", res)
         if res > zero(T)
             return true
@@ -354,7 +352,7 @@ function is_primal_feasible(
     return false
 end
 
-@inline function barrier_dual(
+@inline function barrier_primal(
     K::GenPowerCone{T},
     s::AbstractVector{T}, 
 ) where {T}
@@ -368,12 +366,13 @@ end
 
     gradient_primal!(K,g,s)      
     g .= -g                 #-g(s)
-
-    return -barrier_primal(K,g) #- degree(K)      #YC: previously a bug, force it back to the correct one
+    # println("Inner product is ", dot(g,s))
+    # @assert(is_dual_feasible(K,g))
+    return -barrier_dual(K,g) #- degree(K)      #YC: previously a bug, force it back to the correct one
 end 
 
 
-@inline function barrier_primal(
+@inline function barrier_dual(
     K::GenPowerCone{T},
     z::AbstractVector{T}, 
 ) where {T}
@@ -381,10 +380,7 @@ end
     # Dual barrier
     α = K.α
 
-    res = zero(T)
-    @inbounds for i = 1:dim1(K)
-        res += 2*α[i]*logsafe(z[i])
-    end
+    res = mapreduce((i,j)->2*i*logsafe(j),+,α,(@view z[1:dim1(K)]))
     res = exp(res) - sumsq(@view z[dim1(K)+1:end])
     barrier = -logsafe(res) 
     @inbounds for i = 1:dim1(K)
@@ -393,58 +389,6 @@ end
 
     return barrier
 
-end
-
-function higher_correction!(
-    K::GenPowerCone{T},
-    η::AbstractVector{T},
-    ds::AbstractVector{T},
-    dz::AbstractVector{T}
-) where {T}
-
-    if (all(dz .== zero(T)))
-        # println("affine step")
-        η .= zero(T)
-
-        return nothing
-    end
-
-    u_idxs = 1:dim1(K)
-    w_idxs = dim1(K)+1:dim(K)
-    @views u = K.data.z[u_idxs]
-    @views w = K.data.z[w_idxs]
-    dder3 = η
-    dir = dz
-    @views u_dder3 = dder3[u_idxs]
-    @views w_dder3 = dder3[w_idxs]
-    @views u_dir = dir[u_idxs]
-    @views w_dir = dir[w_idxs]
-    α = K.α
-    phi = K.data.phi
-    ζ = K.data.ζ
-    w2 = K.data.w2
-    zwzwi = (phi + w2) / ζ
-    zzwi = 2 * phi / ζ
-    zwi = 2 / ζ
-    @views udu = K.data.work[u_idxs]
-    @. udu = u_dir / u
-
-    wwd = 2 * dot(w, w_dir)
-    c15 = wwd / ζ
-    audu = dot(α, udu)
-    sumaudu2 = sum(α_i * abs2(udu_i) for (α_i, udu_i) in zip(α, udu))
-    c1 = 2 * zwzwi * abs2(audu) + sumaudu2
-    c10 = sum(abs2, w_dir) + wwd * c15
-
-    c13 = zzwi * (w2 * c1 - 2 * wwd * zwzwi * audu + c10) / ζ
-    c14 = zzwi * (2 * audu * w2 - wwd) / ζ
-    @. u_dder3 = (c13 * α + ((c14 + zwzwi * udu) * α + udu) * udu) / u
-
-    c6 = zwi * (phi * (4 * audu * c15 - c1) - c10) / ζ
-    c7 = zwi * (2 * phi * audu - wwd) / ζ
-    @. w_dder3 = c7 * w_dir + c6 * w
-
-    return nothing
 end
 
 # update gradient and Hessian at dual z = (u,w)
@@ -460,13 +404,12 @@ function update_dual_grad_H(
     r = data.r 
     d1 = data.d1
 
-    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(2*αi), ζ = ϕ - ||w||^2
-    phi = one(T)
-    @inbounds for i = 1:dim1(K)
-        phi *= (z[i])^(2*α[i])
-    end
+    # ϕ = ∏_{i ∈ dim1}(ui)^(2*αi), ζ = ϕ - ||w||^2
+    phi = mapreduce((i,j)->2*i*logsafe(j),+,α,(@view z[1:dim1(K)]))
+    phi = exp(phi)
     norm2w = sumsq(@view z[dim1(K)+1:end])
     ζ = phi - norm2w
+    println("dual ζ is: ", ζ)
     @assert ζ > zero(T)
 
     # compute the gradient at z
@@ -525,10 +468,7 @@ function gradient_primal!(
     α = K.α
 
     # unscaled phi
-    phi = zero(T)
-    @inbounds for i = 1:dim1(K)
-        phi += 2*α[i]*logsafe(s[i])
-    end
+    phi = mapreduce((i,j)->2*i*logsafe(j),+,α,(@view s[1:dim1(K)]))
     phi = exp(phi)
 
     # obtain g1 from the Newton-Raphson method
@@ -558,11 +498,9 @@ function gradient_dual!(
     
     α = K.α
 
-    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(2*αi), ζ = ϕ - ||w||^2
-    phi = one(T)
-    @inbounds for i = 1:dim1(K)
-        phi *= (z[i])^(2*α[i])
-    end
+    # ϕ = ∏_{i ∈ dim1}(ui)^(2*αi), ζ = ϕ - ||w||^2
+    phi = mapreduce((i,j)->2*i*logsafe(j),+,α,(@view z[1:dim1(K)]))
+    phi = exp(phi)
     norm2w = sumsq(@view z[dim1(K)+1:end])
     ζ = phi - norm2w
     @assert ζ > zero(T)
@@ -731,9 +669,9 @@ function higher_correction_mosek!(
     w = @view z[dim1+1:end]
 
     #workspace
-    τ = similar(u)
+    τ = @view ds[1:dim1]      #YC: ds is no longer used later
     @. τ = 2*α/u
-    normd = similar(u)
+    normd = @view K.data.work_pp[1:dim1]
     @. normd = du/u
 
     #constants

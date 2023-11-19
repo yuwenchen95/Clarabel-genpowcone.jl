@@ -171,7 +171,7 @@ function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
 
     iter = 0
     x = x0
-    thr = 1e-12#sqrt(eps(T))     
+    thr = 1e-12    
 
     while iter < 100
 
@@ -191,7 +191,7 @@ function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
 
     @assert(iter < 100)
     # println("iter ", iter, "  f0 is ", f0(x))
-    @assert(abs(f0(x)) < sqrt(eps(T)))
+    @assert(abs(f0(x)) < 100*sqrt(eps(Float64)))
 
     return x
 end

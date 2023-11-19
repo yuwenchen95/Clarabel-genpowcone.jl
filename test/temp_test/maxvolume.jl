@@ -87,13 +87,15 @@ At = spdiagm(0 =>[freq; 1.0])
 # MOI.set(model, MOI.Silent(), true)      #Disable printing information
 set_optimizer_attribute(model,"cratio",0.95)
 set_optimizer_attribute(model,"max_iter",2000)
-set_optimizer_attribute(model,"up_barrier", 1)
-set_optimizer_attribute(model,"low_barrier", 1.0)
-set_optimizer_attribute(model,"min_switch_step_length",0.1)
-set_optimizer_attribute(model,"tol_gap_abs", 1e-6)
-set_optimizer_attribute(model,"tol_gap_rel", 1e-6)
-set_optimizer_attribute(model,"tol_feas", 1e-6)
-set_optimizer_attribute(model,"tol_ktratio", 1e-4)
+set_optimizer_attribute(model,"up_barrier", 1000)
+set_optimizer_attribute(model,"low_barrier", 1000.5)
+set_optimizer_attribute(model,"min_switch_step_length",0.001)
+# set_optimizer_attribute(model,"equilibrate_enable", false)
+
+# set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
+# set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
+# set_optimizer_attribute(model,"tol_feas", 1e-7)
+# set_optimizer_attribute(model,"tol_ktratio", 1e-5)
 optimize!(model)
 @assert isapprox(opt_val,objective_value(model),atol = 1e-4)
 solver = model.moi_backend.optimizer.model.optimizer.solver
@@ -115,9 +117,13 @@ xsol = value.(x)
 #     verbose = true,
 #     direct_kkt_solver = true,
 #     direct_solve_method = :qdldl,
-#     # equilibrate_enable = false
+#     cratio = 0.95,
+#     up_barrier = 1,
+#     low_barrier = 1,
+#     min_switch_step_length = 0.1,
+#     equilibrate_enable = false
 #     )
-# setprecision(BigFloat,256)
+# setprecision(BigFloat,128)
 
 # solver   = Clarabel.Solver{BigFloat}()
 # Clarabel.setup!(solver, Pb, qb, Ab, bb, cones, settings)

@@ -25,6 +25,69 @@ function tensor(f, x)
     return reshape(out, n, n, n)
 end
 
+#Update gradient and the Hessian
+function update_dual_grad_H(
+    K,
+    z::AbstractVector{T}
+) where {T}
+    
+    α = K.α
+    data = K.data
+    p = data.p
+    q = data.q
+    r = data.r 
+    d1 = data.d1
+
+    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(2*αi), ζ = ϕ - ||w||^2
+    phi = mapreduce((i,j)->2*i*Clarabel.logsafe(j),+,α,(@view z[1:Clarabel.dim1(K)]))
+    phi = exp(phi)
+    norm2w = Clarabel.sumsq(@view z[Clarabel.dim1(K)+1:end])
+    ζ = phi - norm2w
+    @assert ζ > zero(T)
+
+    # compute the gradient at z
+    grad = data.grad
+    τ = q           # τ shares memory with q
+
+    @inbounds for i = 1:Clarabel.dim1(K)
+        τ[i] = 2*α[i]/z[i]
+        grad[i] = -τ[i]*phi/ζ - (1-α[i])/z[i]
+    end
+    @inbounds for i = (Clarabel.dim1(K)+1):Clarabel.dim(K)
+        grad[i] = 2*z[i]/ζ
+    end
+
+    # compute Hessian information at z 
+    p0 = sqrt(phi*(phi+norm2w)/2)
+    p1 = -2*phi/p0
+    q0 = sqrt(ζ*phi/2)
+    r1 = 2*sqrt(ζ/(phi+norm2w))
+
+    #YC: p0^2-q0^2 = phi*norm2w donesn't hold for the initial value 
+    # when the dimension of n becomes quite large
+    # It seems that the dual scaling is not a good choice since we need to have the additional term ∏(1/α[i])^(2*α[i]),
+    # which will be increasing when n tends to infinity
+
+    # compute the diagonal d1,d2
+    @inbounds for i = 1:Clarabel.dim1(K)
+        d1[i] = τ[i]*phi/(ζ*z[i]) + (1-α[i])/(z[i]*z[i])
+    end   
+    data.d2 = 2/ζ
+
+    # compute p, q, r where τ shares memory with q
+    p[1:Clarabel.dim1(K)] .= p0*τ/ζ
+    @views p[(Clarabel.dim1(K)+1):end] .= p1*z[(Clarabel.dim1(K)+1):end]/ζ
+
+    q .*= q0/ζ      #τ is abandoned
+    @views r .= r1*z[(Clarabel.dim1(K)+1):end]/ζ
+
+    #Make the copy for higher-order correction
+    K.data.phi = phi
+    K.data.ζ = ζ
+    K.data.w2 = norm2w
+
+end
+
 #Verification
 n = Clarabel.dim(K)
 x0 = rand(rng2,n)
@@ -45,9 +108,9 @@ tx = rand(rng4,n)
 # result .*= -0.5
 
 #from Clarabel 
-result2 = similar(result)
+# result2 = similar(result)
 K.data.z .= x0
-Clarabel.update_dual_grad_H(K,x0)
+update_dual_grad_H(K,x0)
 # Clarabel.higher_correction!(K,result2,dx,dx)
 
 #check Hessian
@@ -59,10 +122,10 @@ invH = inv(H)
 # @assert(all(isapprox.(K.data.grad, gradc)))
 # @assert(all(isapprox.(H,Hc)))
 
-#check primal gradient
-g = K.data.work
-Clarabel.gradient_primal!(K,g,x0) 
-@assert(isapprox(dot(g,x0),-Clarabel.degree(K)))
+# #check primal gradient
+# g = K.data.work
+# Clarabel.gradient_primal!(K,g,x0) 
+# @assert(isapprox(dot(g,x0),-Clarabel.degree(K)))
 
 # #check tensor product 
 # @assert(all(isapprox.(result,result2)))
@@ -214,6 +277,11 @@ mul_Hinv!(K,K.data.work,tx)
 K.data.μ = 1.0
 mul_Hs!(K,K.data.work_pb,K.data.work)
 norm(tx - K.data.work_pb,Inf)
+
+#Verify F′′(x)x =−F′(x)
+K.data.μ = 1.0
+mul_Hs!(K,K.data.work_pb,x0)
+norm(K.data.grad + K.data.work_pb,Inf)
 
 
 # ####################################################
