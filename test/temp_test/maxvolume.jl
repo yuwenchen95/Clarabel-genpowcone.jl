@@ -87,8 +87,8 @@ At = spdiagm(0 =>[freq; 1.0])
 # MOI.set(model, MOI.Silent(), true)      #Disable printing information
 set_optimizer_attribute(model,"cratio",0.95)
 set_optimizer_attribute(model,"max_iter",2000)
-set_optimizer_attribute(model,"up_barrier", 1000)
-set_optimizer_attribute(model,"low_barrier", 1000.5)
+set_optimizer_attribute(model,"up_barrier", 1.0)
+set_optimizer_attribute(model,"low_barrier", 0.5)
 set_optimizer_attribute(model,"min_switch_step_length",0.001)
 # set_optimizer_attribute(model,"equilibrate_enable", false)
 
