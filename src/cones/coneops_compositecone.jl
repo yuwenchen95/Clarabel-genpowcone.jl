@@ -267,7 +267,8 @@ function check_neighbourhood(
     dz::AbstractVector{T},
     ds::AbstractVector{T},
     α::T,
-    μ::T
+    μ::T,
+    thr::T
 ) where {T}
 
     dz    = dz.views
@@ -277,7 +278,7 @@ function check_neighbourhood(
 
     centrality = true
     for (cone,zi,si,dzi,dsi) in zip(cones,z,s,dz,ds)
-        @conedispatch  centrality = check_neighbourhood(cone,zi,si,dzi,dsi,α,μ)
+        @conedispatch  centrality = check_neighbourhood(cone,zi,si,dzi,dsi,α,μ,thr)
         centrality ? continue : return false
     end
 

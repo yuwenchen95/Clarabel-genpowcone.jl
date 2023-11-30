@@ -252,7 +252,8 @@ function check_neighbourhood(
     dz::AbstractVector{T},
     ds::AbstractVector{T},
     α::T,
-    μ::T
+    μ::T,
+    thr::T
 ) where {T}   
 
     # #Hypatia neighbourhood
@@ -289,7 +290,7 @@ function check_neighbourhood(
     μt = dot(gradz,g)    
     neighbourhood = degree(K)/(μt*cur_μ)
     # println("neighbourhood is ", neighbourhood)
-    if (neighbourhood < 1e-6)
+    if (neighbourhood < thr)
         return false
     end
 

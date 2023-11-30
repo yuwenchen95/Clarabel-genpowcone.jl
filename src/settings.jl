@@ -124,6 +124,7 @@ Base.@kwdef mutable struct Settings{T <: AbstractFloat}
     cratio::T                              = 1.0
     up_barrier::T                          = 1.0
     low_barrier::T                         = 0.5
+    neighborhood::T                        = 1e-6
 end
 
 Settings(args...) = Settings{DefaultFloat}(args...)

@@ -256,11 +256,9 @@ function solve!(
 
             # #barrier 
             # barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
-            # println("barrier is ", barrier)
-            
-            s.info.add_barrier = 0.0#1000*exp(-iter/2)
-            
-            # if (scaling == Dual && barrier > s.settings.low_barrier + s.info.add_barrier)
+            # println("barrier is: ", barrier)
+
+            # if (scaling == Dual && barrier > s.settings.low_barrier)
             #     #centering only, without the affine (predictor) step
             #     #YC: no higher order correction at the moment
             #     # println("centering only!")
@@ -290,7 +288,7 @@ function solve!(
             # combined step only on affine step success 
             if is_kkt_solve_success
 
-                # if (scaling == Dual && barrier > s.settings.low_barrier + s.info.add_barrier)
+                # if (scaling == Dual && barrier > s.settings.low_barrier)
                 #     #centering only, without the affine (predictor) step
                 #     α = zero(T)
                 #     σ = s.settings.cratio
@@ -436,11 +434,11 @@ function solver_get_step_length(s::Solver{T},steptype::Symbol,scaling::ScalingSt
     if (!is_symmetric(s.cones) && steptype == :combined && scaling == Dual)
         αinit = α
 
-        # if allows_primal_dual_scaling(s.cones)
-            # α = solver_backtrack_step_to_barrier(s,αinit)
-        # else
+        if allows_primal_dual_scaling(s.cones)
+            α = solver_backtrack_step_to_barrier(s,αinit)
+        else
             α = solver_backtrack_step_to_centrality(s,αinit)
-        # end
+        end
     end
     return α
 end
@@ -483,7 +481,7 @@ function solver_backtrack_step_to_centrality(
     α = αinit
 
     for j = 1:50
-        centrality = centrality_check_mosek(s.variables,s.step_lhs,α,s.cones) 
+        centrality = centrality_check_mosek(s.variables,s.step_lhs,α,s.cones,s.settings.neighborhood) 
         # println("barrier is: ", barrier)
         if centrality
             return α
@@ -549,6 +547,7 @@ function _strategy_checkpoint_small_step(s::Solver{T}, α::T, scaling::ScalingSt
 
     if !is_symmetric(s.cones) &&
         scaling == PrimalDual::ScalingStrategy && α < s.settings.min_switch_step_length
+        println("switch scaling")
         return (Update::StrategyCheckpoint, Dual::ScalingStrategy)
 
     elseif α <= max(zero(T), s.settings.min_terminate_step_length)

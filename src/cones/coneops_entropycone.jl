@@ -264,6 +264,7 @@ function step_length(
     αz = _step_length_n_cone(K, dz, z, αmax, αmin, backtrack, is_dual_feasible_fcn)
     αs = _step_length_n_cone(K, ds, s, αmax, αmin, backtrack, is_primal_feasible_fcn)
 
+    # println(typeof(K), " with α", αz, " and ", αs)
     return (αz,αs)
 end
 
@@ -341,6 +342,7 @@ end
     # NB: ⟨s,g(s)⟩ = - ν
 
     minus_g = minus_gradient_primal(K,s)     #compute g(s)
+    # println("degree error is", dot(s,minus_g) - degree(K))
 
     #YC: need to consider the memory issue later
     return -_barrier_dual(K,minus_g) #- degree(K)
@@ -403,13 +405,14 @@ function minus_gradient_primal(
 
     d = K.d
     # minus_g = similar(K.grad)
-    minus_g = K.work
+    minus_g = K.work_pb
     minus_gq = @view minus_g[2:d+1]
     minus_gr = @view minus_g[d+2:end]
     q = @view s[2:d+1]
     r = @view s[d+2:end]
 
     minus_gp_inv = _newton_raphson_entropycone(s,d)
+    # println("primal gradient residual is: ", minus_gp_inv)
     minus_g[1] = inv(minus_gp_inv)
     @inbounds for i = 1:d
         minus_gq[i] = (minus_g[1]*r[i] + one(T))/q[i]

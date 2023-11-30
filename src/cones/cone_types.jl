@@ -361,13 +361,22 @@ mutable struct PowerMeanConeData{T}
     work::Vector{T}
     #work vector exclusively for computing the primal barrier function.   
     work_pb::Vector{T}
+    #work vector for proximity check
+    work_pp::Vector{T}
+
+
+    #YC: additional values for higher-order correction
+    phi::T
+    ζ::T
 
     function PowerMeanConeData{T}(α::AbstractVector{T}) where {T}
 
         d = length(α)
         dim = d + 1
         @assert all(α .> zero(T))
-        @assert sum(α) ≈ one(T)
+        offset = one(T) - sum(α) 
+        iszero(offset) ? true : α[end] += offset
+        @assert(one(T) ≈ sum(α))
         μ = one(T)
 
         grad   = zeros(T,dim)
@@ -380,8 +389,12 @@ mutable struct PowerMeanConeData{T}
 
         work = zeros(T,dim)
         work_pb = zeros(T,dim)
+        work_pp = zeros(T,dim)
 
-        return new(grad,z,d,μ,p,q,r,d1,d2,work,work_pb)
+        phi = zero(T)
+        ζ = zero(T)
+
+        return new(grad,z,d,μ,p,q,r,d1,d2,work,work_pb,work_pp,phi,ζ)
     end
 end
 
@@ -420,6 +433,8 @@ mutable struct EntropyCone{T} <: AbstractCone{T}
     offd::Vector{T}         #Hessian v,w
     dd::Vector{T}            #Diagonal part
     work::Vector{T}
+    #work vector exclusively for computing the primal barrier function.   
+    work_pb::Vector{T}
 
     function EntropyCone{T}(dim::DefaultInt) where {T}
         @assert dim > 1 
@@ -434,8 +449,9 @@ mutable struct EntropyCone{T} <: AbstractCone{T}
         offd   = zeros(T,d)
         dd      = zeros(T,dim)
         work = similar(grad)
+        work_pb = similar(grad)
 
-        return new(grad,z,d,dim,μ,u,offd,dd,work)
+        return new(grad,z,d,dim,μ,u,offd,dd,work,work_pb)
     end
 end
 

@@ -76,6 +76,7 @@ function centrality_check_mosek(
     step::DefaultVariables{T},
     α::T,
     cones::CompositeCone{T},
+    thr::T
 ) where {T}
 
     central_coef = cones.degree + 1
@@ -90,7 +91,7 @@ function centrality_check_mosek(
     ( z, s) = (variables.z, variables.s)
     (dz,ds) = (step.z, step.s)
 
-    centrality = check_neighbourhood(cones, z, s, dz, ds, α, μ)
+    centrality = check_neighbourhood(cones, z, s, dz, ds, α, μ,thr)
 
     return centrality
 end

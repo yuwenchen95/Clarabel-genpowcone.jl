@@ -201,7 +201,8 @@ function check_neighbourhood(
     dz::AbstractVector{T},
     ds::AbstractVector{T},
     α::T,
-    μ::T
+    μ::T,
+    thr::T
 ) where {T}
 
     μt = zero(T)
@@ -211,7 +212,7 @@ function check_neighbourhood(
 
     neighbourhood = degree(K)/(μt*μ)
     # println("neighbourhood is ", neighbourhood)
-    if (neighbourhood < 1e-6)
+    if (neighbourhood < thr)
         return false
     end
 

@@ -182,7 +182,8 @@ function check_neighbourhood(
     dz::AbstractVector{T},
     ds::AbstractVector{T},
     α::T,
-    μ::T
+    μ::T,
+    thr::T
 ) where {T}
     return true
 end

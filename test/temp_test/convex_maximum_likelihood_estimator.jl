@@ -108,7 +108,7 @@ set_optimizer_attribute(model,"up_barrier", 1.0)
 set_optimizer_attribute(model,"low_barrier", 0.5)
 # set_optimizer_attribute(model,"static_regularization_constant",0.0)
 set_optimizer_attribute(model,"min_terminate_step_length", 1e-3)
-set_optimizer_attribute(model,"cratio",0.95)
+set_optimizer_attribute(model,"cratio",1.0)
 set_optimizer_attribute(model,"max_iter", 500)
 set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
 set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
@@ -117,7 +117,7 @@ set_optimizer_attribute(model,"tol_ktratio", 1e-5)
 # set_optimizer_attribute(model,"equilibrate_max_iter",20)
 # set_optimizer_attribute(model,"equilibrate_min_scaling",1e-4)
 # set_optimizer_attribute(model,"equilibrate_max_scaling",1e4)
-# set_optimizer_attribute(model,"barrier", -n-0.5)
+set_optimizer_attribute(model,"neighborhood", 1e-5)
 optimize!(model)
 psol = value.(x)
 
@@ -125,6 +125,7 @@ solver = model.moi_backend.optimizer.model.optimizer.solver
 
 # #Use different precision
 # T = BigFloat
+# setprecision(BigFloat, 256)
 # Pb = T.(solver.data.P)
 # qb = T.(solver.data.q)
 # Ab = T.(solver.data.A)
@@ -132,8 +133,8 @@ solver = model.moi_backend.optimizer.model.optimizer.solver
 
 # cones = [Clarabel.ZeroConeT(1),           
 #         Clarabel.NonnegativeConeT(n-2),
-#         Clarabel.GenPowerConeT(freq,1)
-#         # Clarabel.PowerMeanConeT(freq)
+#         # Clarabel.GenPowerConeT(freq,1)
+#         Clarabel.PowerMeanConeT(freq)
 #         ]
 
 # settings = Clarabel.Settings{BigFloat}(
@@ -143,11 +144,11 @@ solver = model.moi_backend.optimizer.model.optimizer.solver
 #     up_barrier = 1.0,
 #     low_barrier = 0.5,
 #     min_terminate_step_length = 1e-3,
-#     cratio = 0.95,
+#     cratio = 1.0,
 #     max_iter = 5000,
 #     equilibrate_enable = false
 #     )
-# setprecision(BigFloat,128)
+# # setprecision(BigFloat,128)
 
 # solver   = Clarabel.Solver{BigFloat}()
 # Clarabel.setup!(solver, Pb, qb, Ab, bb, cones, settings)

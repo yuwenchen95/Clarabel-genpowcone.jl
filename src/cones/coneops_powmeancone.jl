@@ -67,7 +67,8 @@ function unit_initialization!(
     get_central_ray_powermean(α,s)
  
     #set @. z = -g(s)
-    minus_gradient_primal(K,s,z)   
+    gradient_primal!(K,z,s) 
+    z .*= -one(T)  
  
     return nothing
  end
@@ -292,6 +293,39 @@ function compute_barrier(
     return barrier
 end
 
+function check_neighbourhood(
+    K::PowerMeanCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T},  
+    dz::AbstractVector{T},
+    ds::AbstractVector{T},
+    α::T,
+    μ::T,
+    thr::T
+) where {T}   
+
+    work = K.data.work
+    @. work = s+α*ds
+    g = K.data.work_pb
+    @. g = z+α*dz
+    # cur_μ = dot(work,g)
+    cur_μ = μ
+
+    #overwrite g with the new gradient
+    gradz = K.data.work_pp
+    gradient_dual!(K,gradz,g)
+    # @assert(isapprox(dot(gradz,g),-degree(K)))
+    gradient_primal!(K,g,work) 
+    
+    μt = dot(gradz,g)    
+    neighbourhood = degree(K)/(μt*cur_μ)
+    # println("neighbourhood is ", neighbourhood)
+    if (neighbourhood < thr)
+        return false
+    end
+
+    return true
+end
 
 # ----------------------------------------------
 #  internal operations for power mean cones
@@ -337,7 +371,8 @@ end
     # NB: ⟨s,g(s)⟩ = -(dim1+1) = - ν
 
     minus_g = K.data.work_pb
-    minus_gradient_primal(K,s,minus_g)     #compute g(s)
+    gradient_primal!(K,minus_g,s)     #compute g(s)
+    minus_g .*= -one(T)
 
     #YC: need to consider the memory issue later
     return -barrier_dual(K,minus_g) #- degree(K)
@@ -389,15 +424,14 @@ end
 
 # Compute the primal gradient of f(s) at s
 # solve it by the Newton-Raphson method
-function minus_gradient_primal(
+function gradient_primal!(
     K::PowerMeanCone{T},
+    g::Union{AbstractVector{T}, NTuple{N,T}},
     s::Union{AbstractVector{T}, NTuple{N,T}},
-    minus_g::Union{AbstractVector{T}, NTuple{N,T}},
 ) where {N<:Integer,T}
 
     α = K.α
     dim1 = K.data.d
-    g = minus_g
 
     # obtain g0 from the Newton-Raphson method
     p = @view s[1:dim1]
@@ -415,12 +449,37 @@ function minus_gradient_primal(
 
     @. gp = -(1+α+α*s[end]*g[end])/p
 
-    g .*= -one(T)    #add the sign to it, i.e. return -g
-
-    @assert dot(g,s) ≈ degree(K)
+    @assert dot(g,s) ≈ -degree(K)
 
 end
 
+function gradient_dual!(
+    K::PowerMeanCone{T},
+    grad::AbstractVector{T},
+    z::AbstractVector{T}
+) where {T}
+
+    α = K.α
+
+    dim1 = K.data.d
+
+    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(αi), ζ = φ + w
+    ϕ = one(T)
+    @inbounds for i = 1:dim1
+        ϕ *= (z[i]/α[i])^(α[i])
+    end
+    ζ = ϕ + z[end]
+    @assert ζ > zero(T)
+
+    # compute the gradient at z
+    grad = K.data.grad
+    ϕdivζ = ϕ/ζ
+    @inbounds for i = 1:dim1
+        grad[i] = -α[i]/z[i]*ϕdivζ - (1-α[i])/z[i]
+    end
+    grad[end] = - inv(ζ) - inv(z[end])
+
+end
 # Newton-Raphson method:
 # solve a one-dimensional equation f(x) = 0
 # x(k+1) = x(k) - f(x(k))/f'(x(k))
@@ -495,7 +554,7 @@ function _newton_raphson_powmeancone_nonpos(
         t1 = 2*inv(t0);
         t2 = (t0 + r)/2;
         @inbounds for i = 1:dim
-            f1 += α[i]*logsafe((1 + α[i]*x*t1)/(x + α[i]*t2))
+            f1 += α[i]*((1 + α[i]*x*t1)/(x + α[i]*t2))
         end
 
         return f1
@@ -552,4 +611,7 @@ function _update_dual_grad_H(
     q .*= q0      #τ is abandoned
     K.data.r[1] = one(T)
 
+    K.data.phi = ϕ 
+    K.data.ζ = ζ
+    println("dual ζ is: ", ζ)
 end
