@@ -296,6 +296,12 @@ function solve!(
                     # calculate step length and centering parameter
                     # --------------
                     α = solver_get_step_length(s,:affine,scaling)
+                    
+                    #YC: only take the centering step without the higher-order correction when the affine step size is too small
+                    if (α < s.settings.min_switch_step_length && iter > 1)
+                        _reset_step_lhs(s.step_lhs)
+                        α = zero(T)
+                    end
                     σ = _calc_centering_parameter(α)
                 # end
 
@@ -334,13 +340,9 @@ function solve!(
             #--------------
             α = solver_get_step_length(s,:combined,scaling)
 
-            if (α < s.settings.min_terminate_step_length && scaling == Dual)
-                s.step_lhs.τ = zero(T)
-                s.step_lhs.κ = zero(T)
-                s.step_lhs.x .= zero(T)
-                s.step_lhs.z.vec .= zero(T)
-                s.step_lhs.s.vec .= zero(T)
-                println("only correction at step: ", α)
+            #YC: only take the centering step without the higher-order correction when the combined step size is too small
+            if (α < s.settings.min_switch_step_length)
+                _reset_step_lhs(s.step_lhs)
                 α = zero(T)
                 σ = s.settings.cratio
 
@@ -502,7 +504,18 @@ function _calc_centering_parameter(α::T) where{T}
     return σ = (1-α)^3#*min((1-α)^2,0.25)
 end
 
+# YC: reset the lhs
+function _reset_step_lhs(
+    step::DefaultVariables{T}
+) where {T}
 
+    step.τ = zero(T)
+    step.κ = zero(T)
+    step.x .= zero(T)
+    step.z.vec .= zero(T)
+    step.s.vec .= zero(T)
+
+end
 
 function _strategy_checkpoint_insufficient_progress(s::Solver{T},scaling::ScalingStrategy) where {T} 
 

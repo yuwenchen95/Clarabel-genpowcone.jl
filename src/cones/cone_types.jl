@@ -435,6 +435,7 @@ mutable struct EntropyCone{T} <: AbstractCone{T}
     work::Vector{T}
     #work vector exclusively for computing the primal barrier function.   
     work_pb::Vector{T}
+    work_pp::Vector{T}
 
     function EntropyCone{T}(dim::DefaultInt) where {T}
         @assert dim > 1 
@@ -450,8 +451,9 @@ mutable struct EntropyCone{T} <: AbstractCone{T}
         dd      = zeros(T,dim)
         work = similar(grad)
         work_pb = similar(grad)
+        work_pp = similar(grad)
 
-        return new(grad,z,d,dim,μ,u,offd,dd,work,work_pb)
+        return new(grad,z,d,dim,μ,u,offd,dd,work,work_pb,work_pp)
     end
 end
 

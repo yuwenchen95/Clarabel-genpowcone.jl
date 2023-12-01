@@ -70,8 +70,9 @@ function unit_initialization!(
     @views s[d+2:end] .= w
     # find z such that z = -g*(s)
 
-    minus_gs = minus_gradient_primal(K,s)     #YC: may have memory issue
-    @. z = minus_gs
+    minus_g = K.work_pb
+    minus_gradient_primal(K,minus_g,s)     #YC: may have memory issue
+    @. z = minus_g
 
     return nothing
  end
@@ -302,6 +303,39 @@ function compute_barrier(
     return barrier
 end
 
+function check_neighbourhood(
+    K::EntropyCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T},  
+    dz::AbstractVector{T},
+    ds::AbstractVector{T},
+    α::T,
+    μ::T,
+    thr::T
+) where {T}   
+
+    work = K.work
+    @. work = s+α*ds
+    g = K.work_pb
+    @. g = z+α*dz
+    # cur_μ = dot(work,g)
+    cur_μ = μ
+
+    #overwrite g with the new gradient
+    gradz = K.work_pp
+    gradient_dual!(K,gradz,g)
+    # @assert(isapprox(dot(gradz,g),-degree(K)))
+    minus_gradient_primal(K,g,work) 
+    
+    μt = -dot(gradz,g)    
+    neighbourhood = degree(K)/(μt*cur_μ)
+    # println("neighbourhood is ", neighbourhood)
+    if (neighbourhood < thr)
+        return false
+    end
+
+    return true
+end
 
 # ----------------------------------------------
 #  internal operations for relative entropy cones
@@ -341,7 +375,8 @@ end
     # Primal barrier: f(s) = ⟨s,g(s)⟩ - f*(-g(s))
     # NB: ⟨s,g(s)⟩ = - ν
 
-    minus_g = minus_gradient_primal(K,s)     #compute g(s)
+    minus_g = K.work_pb
+    minus_gradient_primal(K,minus_g,s)     #compute g(s)
     # println("degree error is", dot(s,minus_g) - degree(K))
 
     #YC: need to consider the memory issue later
@@ -400,12 +435,12 @@ end
 # solve it by the Newton-Raphson method
 function minus_gradient_primal(
     K::EntropyCone{T},
+    minus_g::Union{AbstractVector{T}, NTuple{N,T}},
     s::Union{AbstractVector{T}, NTuple{N,T}},
 ) where {N<:Integer,T}
 
     d = K.d
     # minus_g = similar(K.grad)
-    minus_g = K.work_pb
     minus_gq = @view minus_g[2:d+1]
     minus_gr = @view minus_g[d+2:end]
     q = @view s[2:d+1]
@@ -419,9 +454,26 @@ function minus_gradient_primal(
         minus_gr[i] = one(T)/r[i] + minus_g[1]*logsafe(minus_g[1]/minus_gq[i]) - minus_g[1]
     end
 
-    return minus_g
 end
 
+function gradient_dual!(
+    K::EntropyCone{T},
+    grad::AbstractVector{T},
+    z::AbstractVector{T}
+) where {T}
+    d = K.d
+
+    # compute the gradient at z
+    grad[1] = -T(d)/z[1]
+    @inbounds for i = 1:d
+        logdiv_i = log(z[1]/z[i+1])
+        γi = z[d+1+i] -z[1]*logdiv_i + z[1]
+
+        grad[i+1] = -z[1]/(γi*z[i+1]) - one(T)/z[i+1]
+        grad[d+1+i] = -one(T)/γi
+        grad[1] += logdiv_i/γi
+    end
+end
 # Newton-Raphson method:
 # solve a one-dimensional concave equation f(x) = 0
 # x(k+1) = x(k) - f(x(k))/f'(x(k))
