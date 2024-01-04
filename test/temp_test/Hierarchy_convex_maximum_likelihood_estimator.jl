@@ -7,7 +7,7 @@ dist = Exponential(2.0)
 # dist = BetaPrime(1.0,2.0) 
 
 # Generate random samples from the distribution
-nbase = 10
+nbase = 20
 level = 3
 n = nbase^level  # Number of samples
 
@@ -69,7 +69,7 @@ end
 for i = 1:n-2
     @constraint(model, (x[i+1]-x[i])/(y[i+1]-y[i]) - (x[i+2]-x[i+1])/(y[i+2]-y[i+1])<= 0)
 end
-@constraint(model, x .>= 0)
+# @constraint(model, x .>= 0)
 # MOI.set(model, MOI.Silent(), true)      #Disable printing information
 optimize!(model)
 xsol = value.(x)
@@ -123,7 +123,7 @@ for (depth,cur_freq) in enumerate(freqTable)
         @views slice = cur_freq[inds]
         At = spdiagm(0 =>[deepcopy(slice); 1.0])
         global start_t += 1
-        @constraint(model, At*vcat(x[start_ind .+ (inds)],t[start_t]) in Clarabel.MOI.GenPowerCone(slice,1))
+        @constraint(model, At*vcat(x[start_ind .+ (inds)],t[start_t]) in Clarabel.MOI.DualGenPowerCone(slice,1))
     end
 
     global start_ind += cur_len
@@ -134,7 +134,7 @@ end
 for i = 1:n-2
     @constraint(model, (x[i+1]-x[i])/(y[i+1]-y[i]) - (x[i+2]-x[i+1])/(y[i+2]-y[i+1])<= 0)
 end
-@constraint(model, x .>= 0)
+@constraint(model, t .>= 0)
 
 # set_optimizer_attribute(model,"equilibrate_enable",false)
 set_optimizer_attribute(model,"up_barrier", 1.0)
@@ -162,8 +162,8 @@ solver = model.moi_backend.optimizer.model.optimizer.solver
 
 # cones = [Clarabel.ZeroConeT(1),           
 #         Clarabel.NonnegativeConeT(2*n-2),
-#         Clarabel.GenPowerConeT(freq,1)
-#         # Clarabel.PowerMeanConeT(freq)
+#         Clarabel.DualGenPowerConeT(freq,1)
+#         # Clarabel.DualPowerMeanConeT(freq)
 #         ]
 
 # settings = Clarabel.Settings{BigFloat}(

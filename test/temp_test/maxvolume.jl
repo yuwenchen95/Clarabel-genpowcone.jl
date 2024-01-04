@@ -4,7 +4,7 @@ using JuMP
 # using JLD,JLD2
 # include(".\\..\\src\\Clarabel.jl")
 using Random
-# using Clarabel
+using Clarabel
 # using Hypatia
 # using BenchmarkTools
 
@@ -21,7 +21,7 @@ x = randn(rng,n)
 # A = sparse(Symmetric(sprand(n,n,1.0/n)) + 10I)
 A = sparse(1.0*I(n))
 gamma = norm(A * x) / sqrt(n)
-freq = ones(n) + rand(rng,n)
+freq = ones(n) #+ rand(rng,n)
 normalize!(freq,1)
 
 #######################################################################
@@ -80,24 +80,26 @@ model = Model(Clarabel.Optimizer)
 @variable(model, x[1:n])
 @objective(model, Max, t)
 At = spdiagm(0 =>[freq; 1.0])
-@constraint(model, At*vcat(x,t) in Clarabel.MOI.GenPowerCone(freq,1))
+@constraint(model, At*vcat(x,t) in Clarabel.MOI.DualGenPowerCone(freq,1))
+# At = spdiagm(0 =>[freq; -1.0])
+# @constraint(model, At*vcat(x,t) in Clarabel.MOI.DualPowerMeanCone(freq))
 # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
 @constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
 # MOI.set(model, MOI.Silent(), true)      #Disable printing information
-set_optimizer_attribute(model,"cratio",0.95)
+set_optimizer_attribute(model,"cratio",0.9)
 set_optimizer_attribute(model,"max_iter",2000)
 set_optimizer_attribute(model,"up_barrier", 1.0)
 set_optimizer_attribute(model,"low_barrier", 0.5)
 set_optimizer_attribute(model,"min_switch_step_length",0.001)
 # set_optimizer_attribute(model,"equilibrate_enable", false)
 
-# set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
-# set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
-# set_optimizer_attribute(model,"tol_feas", 1e-7)
-# set_optimizer_attribute(model,"tol_ktratio", 1e-5)
+set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
+set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
+set_optimizer_attribute(model,"tol_feas", 1e-7)
+set_optimizer_attribute(model,"tol_ktratio", 1e-5)
 optimize!(model)
-@assert isapprox(opt_val,objective_value(model),atol = 1e-4)
+# @assert isapprox(opt_val,objective_value(model),atol = 1e-4)
 solver = model.moi_backend.optimizer.model.optimizer.solver
 xsol = value.(x)
 

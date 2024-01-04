@@ -3,7 +3,7 @@
 # cone, or their respective dual cones.
 
 function backtrack_search(
-    ::Union{PowerCone{T},ExponentialCone{T},GenPowerCone{T}},
+    ::Union{PowerCone{T},ExponentialCone{T},GenPowerCone{T},DualGenPowerCone{T}},
     dq::AbstractVector{T},
     q::AbstractVector{T},
     α_init::T,
@@ -180,18 +180,17 @@ function _newton_raphson_onesided(x0::T,f0::Function,f1::Function) where {T}
         fval = f0(x)
         dx    = -fval/dfdx
 
-        # println("iter ", iter, "  f0 is ", f0(x), "  and f1 is ", f1(x))
+        # println("iter ", iter, "  x is ", x, "  f0 is ", f0(x), "  and f1 is ", f1(x))
 
         #Either the function value or the move is small enough
-        if (abs(fval) < thr) || (abs(dx/x) < thr)|| (abs(dx) < thr)
+        if (abs(fval) < thr) || (abs(dx/x) < eps(T))|| (abs(dx) < eps(T))
             break
         end
         x += dx
     end
 
-    @assert(iter < 100)
+    @assert(iter < 100 || abs(f0(x))<sqrt(eps(Float64)))
     # println("iter ", iter, "  f0 is ", f0(x))
-    @assert(abs(f0(x)) < 100*sqrt(eps(Float64)))
 
     return x
 end

@@ -24,6 +24,21 @@ GenPowerCone(args...) = GenPowerCone{Float64}(args...)
 MathOptInterface.dimension(cone::GenPowerCone) = length(cone.α) + cone.dim2
 Base.copy(cone::GenPowerCone{Float64}) = deepcopy(cone)
 
+struct DualGenPowerCone{T<:Real} <: MathOptInterface.AbstractVectorSet
+    α::Vector{T}
+    dim2::Int
+    function DualGenPowerCone(α::AbstractVector{T}, dim2::Int) where{T}
+        @assert all(α .> zero(T))
+        @assert isapprox(sum(α),one(T), atol=eps()*length(α)/2)
+        new{T}(collect(α), dim2)
+    end
+end 
+
+DualGenPowerCone(args...) = DualGenPowerCone{Float64}(args...)
+
+# enable use of this type as a MOI constraint type
+MathOptInterface.dimension(cone::DualGenPowerCone) = length(cone.α) + cone.dim2
+Base.copy(cone::DualGenPowerCone{Float64}) = deepcopy(cone)
 
 struct PowerMeanCone{T<:Real} <: MathOptInterface.AbstractVectorSet
     α::Vector{T}
@@ -37,6 +52,19 @@ end
 PowerMeanCone(args...) = PowerMeanCone{Float64}(args...)
 MathOptInterface.dimension(cone::PowerMeanCone) = (length(cone.α)+1)
 Base.copy(cone::PowerMeanCone{Float64}) = deepcopy(cone)
+
+struct DualPowerMeanCone{T<:Real} <: MathOptInterface.AbstractVectorSet
+    α::Vector{T}
+    function DualPowerMeanCone(α::AbstractVector{T}) where{T}
+        @assert all(α .> zero(T))
+        @assert isapprox(sum(α),one(T), atol=eps()*length(α)/2)
+        new{T}(collect(α))
+    end
+end
+
+DualPowerMeanCone(args...) = DualPowerMeanCone{Float64}(args...)
+MathOptInterface.dimension(cone::DualPowerMeanCone) = (length(cone.α)+1)
+Base.copy(cone::DualPowerMeanCone{Float64}) = deepcopy(cone)
 
 struct EntropyCone{T<:Real} <: MathOptInterface.AbstractVectorSet
     dim::Int

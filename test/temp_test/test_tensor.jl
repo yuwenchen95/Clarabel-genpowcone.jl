@@ -4,7 +4,7 @@ using LinearAlgebra
 # using Clarabel
 
 #power 
-m1 = 5
+m1 = 50
 dim2 = 1
 rng = Random.MersenneTwister(1)
 rng2 = Random.MersenneTwister(10)

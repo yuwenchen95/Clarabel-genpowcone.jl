@@ -256,6 +256,7 @@ function solve!(
 
             # #barrier 
             # barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
+            # @assert(barrier > -sqrt(eps(T)))
             # println("barrier is: ", barrier)
 
             # if (scaling == Dual && barrier > s.settings.low_barrier)
@@ -296,12 +297,14 @@ function solve!(
                     # calculate step length and centering parameter
                     # --------------
                     α = solver_get_step_length(s,:affine,scaling)
+                    # println("affine step: ",α)
                     
-                    #YC: only take the centering step without the higher-order correction when the affine step size is too small
-                    if (α < s.settings.min_switch_step_length && iter > 1)
-                        _reset_step_lhs(s.step_lhs)
-                        α = zero(T)
-                    end
+                    # #YC: only take the centering step without the higher-order correction when the affine step size is too small
+                    # if (α < s.settings.min_switch_step_length && iter > 1)
+                    #     println("No affine step")
+                    #     _reset_step_lhs(s.step_lhs)
+                    #     α = zero(T)
+                    # end
                     σ = _calc_centering_parameter(α)
                 # end
 
@@ -343,6 +346,7 @@ function solve!(
             #YC: only take the centering step without the higher-order correction when the combined step size is too small
             if (α < s.settings.min_switch_step_length)
                 _reset_step_lhs(s.step_lhs)
+                # println("only centering")
                 α = zero(T)
                 σ = s.settings.cratio
 

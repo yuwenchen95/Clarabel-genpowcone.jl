@@ -110,6 +110,8 @@ function update_scaling!(
         K.z[i] = z[i]
     end
 
+    # monitor_residuals(K,z,s)
+
     return is_scaling_success = true
 end
 
@@ -519,6 +521,35 @@ function _newton_raphson_entropycone(
 
 end
 
+#YC: monitor the primal and dual residuals
+function monitor_residuals(
+    K::EntropyCone{T},
+    z::AbstractVector{T},
+    s::AbstractVector{T}
+) where {T}
+
+    d = K.d
+
+    #Dual residual
+    v = @view z[2:d+1]
+    w = @view z[d+2:end]
+    ζd = Inf
+
+    @inbounds for i = 1:d
+        ζd = min(ζd,w[i] - z[1]*logsafe(z[1]/v[i]) + z[1])
+    end
+
+    #Primal residual
+    v = @view s[2:d+1]
+    w = @view s[d+2:end]
+
+    ζp = s[1]
+    @inbounds for i = 1:d
+        ζp -= w[i]*logsafe(w[i]/v[i])
+    end
+
+    println("primal ζp is: ", ζp, "  dual ζd is: ", ζd)
+end
 
 # update gradient and Hessian at dual z = (u,w)
 function _update_dual_grad_H(

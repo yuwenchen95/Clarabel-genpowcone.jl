@@ -3,26 +3,26 @@
 # ----------------------------------------------------
 
 #dimensions of the subcomponents
-dim1(K::PowerMeanCone{T}) where {T} = length(K.α)
-dim2(K::PowerMeanCone{T}) where {T} = 1
+dim1(K::DualPowerMeanCone{T}) where {T} = length(K.α)
+dim2(K::DualPowerMeanCone{T}) where {T} = 1
 
 # degree of the cone is the dim of power vector + 1
-dim(K::PowerMeanCone{T}) where {T} = K.dim
-degree(K::PowerMeanCone{T}) where {T} = K.dim
-numel(K::PowerMeanCone{T}) where {T} = dim(K)
+dim(K::DualPowerMeanCone{T}) where {T} = K.dim
+degree(K::DualPowerMeanCone{T}) where {T} = K.dim
+numel(K::DualPowerMeanCone{T}) where {T} = dim(K)
 
-function is_sparse_expandable(::PowerMeanCone{T}) where{T}
+function is_sparse_expandable(::DualPowerMeanCone{T}) where{T}
     # we do not curently have a way of representing
     # this cone in non-expanded form
     return true
 end
 
-is_symmetric(::PowerMeanCone{T}) where {T} = false
-allows_primal_dual_scaling(::PowerMeanCone{T}) where {T} = false
+is_symmetric(::DualPowerMeanCone{T}) where {T} = false
+allows_primal_dual_scaling(::DualPowerMeanCone{T}) where {T} = false
 
 
 function shift_to_cone!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     z::AbstractVector{T}
 ) where{T}
 
@@ -32,31 +32,32 @@ function shift_to_cone!(
     # 
 end
 
-function get_central_ray_powermean(α::AbstractVector{T},s::AbstractVector{T}) where {T <: Real}
-    d = length(α)
-    # predict w given α and d
-    w = view(s,1:d)
-    if d == 1
-        w .= 1.306563
-    elseif d == 2
-        @. w = 1.0049885 + 0.2986276 * α
-    elseif d <= 5
-        @. w = 1.0040142949 - 0.0004885108 * d + 0.3016645951 * α
-    elseif d <= 20
-        @. w = 1.001168 - 4.547017e-05 * d + 3.032880e-01 * α
-    elseif d <= 100
-        @. w = 1.000069 - 5.469926e-07 * d + 3.074084e-01 * α
-    else
-        @. w = 1 + 3.086535e-01 * α
-    end
-    # get u in closed form from w
-    p = exp(sum(α_i * log(w_i) for (α_i, w_i) in zip(α, w)))
-    s[end] = p - p / d * sum(α_i / (abs2(w_i) - 1) for (α_i, w_i) in zip(α, w))
+#YC: now defined in coneops_powmeancone.jl
+# function get_central_ray_powermean(α::AbstractVector{T},s::AbstractVector{T}) where {T <: Real}
+#     d = length(α)
+#     # predict w given α and d
+#     w = view(s,1:d)
+#     if d == 1
+#         w .= 1.306563
+#     elseif d == 2
+#         @. w = 1.0049885 + 0.2986276 * α
+#     elseif d <= 5
+#         @. w = 1.0040142949 - 0.0004885108 * d + 0.3016645951 * α
+#     elseif d <= 20
+#         @. w = 1.001168 - 4.547017e-05 * d + 3.032880e-01 * α
+#     elseif d <= 100
+#         @. w = 1.000069 - 5.469926e-07 * d + 3.074084e-01 * α
+#     else
+#         @. w = 1 + 3.086535e-01 * α
+#     end
+#     # get u in closed form from w
+#     p = exp(sum(α_i * log(w_i) for (α_i, w_i) in zip(α, w)))
+#     s[end] = p - p / d * sum(α_i / (abs2(w_i) - 1) for (α_i, w_i) in zip(α, w))
 
-end
+# end
 
 function unit_initialization!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     z::AbstractVector{T},
     s::AbstractVector{T}
  ) where{T}
@@ -64,17 +65,17 @@ function unit_initialization!(
     α = K.α
  
     # init s as in Hypatia
-    get_central_ray_powermean(α,s)
+    get_central_ray_powermean(α,z)
  
-    #set @. z = -g(s)
-    gradient_primal!(K,z,s) 
-    z .*= -one(T)  
+    #set @. s = -g(z)
+    gradient_dual!(K,s,z) 
+    s .*= -one(T)  
  
     return nothing
  end
 
 function set_identity_scaling!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
 ) where {T}
 
     # We should never use identity scaling because 
@@ -83,7 +84,7 @@ function set_identity_scaling!(
 end
 
 function update_scaling!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     s::AbstractVector{T},
     z::AbstractVector{T},
     μ::T,
@@ -110,14 +111,14 @@ function update_scaling!(
 end
 
 function Hs_is_diagonal(
-    K::PowerMeanCone{T}
+    K::DualPowerMeanCone{T}
 ) where{T}
     return true
 end
 
 # return μH*(z) for power mean cone
 function get_Hs!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     Hsblock::AbstractVector{T}
 ) where {T}
 
@@ -135,7 +136,7 @@ end
 
 # compute the product y = Hs*x = μH(z)x
 function mul_Hs!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     y::AbstractVector{T},
     x::AbstractVector{T},
     workz::AbstractVector{T}
@@ -162,7 +163,7 @@ function mul_Hs!(
 end
 
 function affine_ds!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     ds::AbstractVector{T},
     s::AbstractVector{T}
 ) where {T}
@@ -174,27 +175,32 @@ function affine_ds!(
 end
 
 function combined_ds_shift!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     shift::AbstractVector{T},
     step_z::AbstractVector{T},
     step_s::AbstractVector{T},
     σμ::T
 ) where {T}
     
-    #YC: No 3rd order correction at present
-
     # #3rd order correction requires input variables z
-    # η = _higher_correction!(K,step_s,step_z)     
+    # and an allocated vector for the correction η
+    η = K.data.work_pb
 
-    @inbounds for i = 1:K.dim
-        shift[i] = K.data.grad[i]*σμ # - η[i]
+    if (all(step_z .== zero(T)))
+        η .= zero(T)
+    else
+        higher_correction_mosek!(K,η,step_s,step_z)  
+    end  
+    # println("Higher order norm: ", norm(η,Inf))
+    @inbounds for i = 1:Clarabel.dim(K)
+        shift[i] = K.data.grad[i]*σμ + η[i]
     end
 
     return nothing
 end
 
 function Δs_from_Δz_offset!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     out::AbstractVector{T},
     ds::AbstractVector{T},
     work::AbstractVector{T},
@@ -210,7 +216,7 @@ end
 
 
 function _step_length_n_cone(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     dq::AbstractVector{T},
     q::AbstractVector{T},
     α_init::T,
@@ -241,7 +247,7 @@ end
 
 #return maximum allowable step length while remaining in the power mean cone
 function step_length(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     dz::AbstractVector{T},
     ds::AbstractVector{T},
      z::AbstractVector{T},
@@ -255,8 +261,8 @@ function step_length(
 
     #need functions as closures to capture the power K.α
     #and use the same backtrack mechanism as the expcone
-    is_primal_feasible_fcn = s -> _is_primal_feasible_powmeancone(s,K.α,K.data.d)
-    is_dual_feasible_fcn   = s -> _is_dual_feasible_powmeancone(s,K.α,K.data.d)
+    is_primal_feasible_fcn = s -> _is_primal_feasible_dualpowmeancone(s,K.α,K.data.d)
+    is_dual_feasible_fcn   = s -> _is_dual_feasible_dualpowmeancone(s,K.α,K.data.d)
 
     αz = _step_length_n_cone(K, dz, z, αmax, αmin, backtrack, is_dual_feasible_fcn)
     αs = _step_length_n_cone(K, ds, s, αmax, αmin, backtrack, is_primal_feasible_fcn)
@@ -265,7 +271,7 @@ function step_length(
 end
 
 function compute_barrier(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     z::AbstractVector{T},
     s::AbstractVector{T},
     dz::AbstractVector{T},
@@ -294,7 +300,7 @@ function compute_barrier(
 end
 
 function check_neighbourhood(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     z::AbstractVector{T},
     s::AbstractVector{T},  
     dz::AbstractVector{T},
@@ -339,7 +345,7 @@ end
 
 
 @inline function barrier_dual(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     z::Union{AbstractVector{T}, NTuple{N,T}}
 ) where {N<:Integer,T}
 
@@ -349,21 +355,20 @@ end
 
     res = zero(T)
     @inbounds for i = 1:dim1
-        res += α[i]*logsafe(z[i]/α[i])
+        res += α[i]*logsafe(z[i])
     end
-    res = exp(res) + z[end]
+    res = exp(res) - z[end]
     barrier = -logsafe(res) 
     @inbounds for i = 1:dim1
-        barrier -= (one(T)-α[i])*logsafe(z[i])
+        barrier -= logsafe(z[i])
     end
-    barrier -= logsafe(-z[end])
 
     return barrier
 
 end
 
 @inline function barrier_primal(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     s::Union{AbstractVector{T}, NTuple{N,T}}
 ) where {N<:Integer,T}
 
@@ -380,8 +385,8 @@ end
 
 
 
-# Returns true if s is primal feasible
-function _is_primal_feasible_powmeancone(
+# Returns true if s is dual feasible
+function _is_dual_feasible_dualpowmeancone(
     s::AbstractVector{T},
     α::AbstractVector{T},
     dim1::Int
@@ -401,8 +406,8 @@ function _is_primal_feasible_powmeancone(
     return false
 end
 
-# Returns true if z is dual feasible
-function _is_dual_feasible_powmeancone(
+# Returns true if s is primal feasible
+function _is_primal_feasible_dualpowmeancone(
     z::AbstractVector{T},
     α::AbstractVector{T},
     dim1::Int
@@ -425,7 +430,7 @@ end
 # Compute the primal gradient of f(s) at s
 # solve it by the Newton-Raphson method
 function gradient_primal!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     g::Union{AbstractVector{T}, NTuple{N,T}},
     s::Union{AbstractVector{T}, NTuple{N,T}},
 ) where {N<:Integer,T}
@@ -437,24 +442,18 @@ function gradient_primal!(
     p = @view s[1:dim1]
     gp = @view g[1:dim1]
 
-    if s[end] > zero(T)
-        g0 = _newton_raphson_powmeancone_pos(dim1,p,s[end],α)
-        g[end] = 1/g0
-    else
-        invϕ = _newton_raphson_powmeancone_nonpos(dim1,p,s[end],α)
-        ϕ = inv(invϕ)
-        invr = inv(s[end])
-        g[end] = (ϕ-sqrt(ϕ*ϕ + 4*invr*invr))/2 - invr
-    end
+    g0 = _newton_raphson_dualpowmeancone(dim1,p,s[end],α)
+    invg0 = inv(g0)
+    g[end] = -inv(s[end]) - invg0
 
-    @. gp = -(1+α+α*s[end]*g[end])/p
+    @. gp = (s[end]*α*invg0-one(T))/p
 
-    @assert dot(g,s) ≈ -degree(K)
+    # @assert dot(g,s) ≈ -degree(K)
 
 end
 
 function gradient_dual!(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     grad::AbstractVector{T},
     z::AbstractVector{T}
 ) where {T}
@@ -463,20 +462,20 @@ function gradient_dual!(
 
     dim1 = K.data.d
 
-    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(αi), ζ = φ + w
+    # ϕ = ∏_{i ∈ dim1}(ui)^(αi), ζ = φ - w
     ϕ = one(T)
     @inbounds for i = 1:dim1
-        ϕ *= (z[i]/α[i])^(α[i])
+        ϕ *= (z[i])^(α[i])
     end
-    ζ = ϕ + z[end]
+    ζ = ϕ - z[end]
     @assert ζ > zero(T)
 
     # compute the gradient at z
     ϕdivζ = ϕ/ζ
     @inbounds for i = 1:dim1
-        grad[i] = -α[i]/z[i]*ϕdivζ - (1-α[i])/z[i]
+        grad[i] = -α[i]/z[i]*ϕdivζ - inv(z[i])
     end
-    grad[end] = - inv(ζ) - inv(z[end])
+    grad[end] = inv(ζ)
 
 end
 # Newton-Raphson method:
@@ -485,7 +484,7 @@ end
 # When we initialize with x0 = 0 for the power mean cone, 
 # the Newton-Raphson method converges quadratically
 
-function _newton_raphson_powmeancone_pos(
+function _newton_raphson_dualpowmeancone(
     dim::Int,
     p::AbstractVector{T},
     r::T,
@@ -494,53 +493,16 @@ function _newton_raphson_powmeancone_pos(
 
     # init point x0 = 0
     x0 = zero(T)
-
-    # function for f(x) = 0
-    function f0(x)
-        f0 = -logsafe(one(T) + 1/(r+x));
-        @inbounds for i = 1:dim
-            f0 += α[i]*logsafe(((1+α[i])*x/α[i]+r)/p[i])
-        end
-
-        return f0
-    end
-
-    # first derivative
-    function f1(x)
-        f1 = one(T)/((r+x)*(r+x+1));
-        @inbounds for i = 1:dim
-            f1 += α[i]/(x + α[i]*r/(1+α[i]))
-        end
-
-        return f1
-    end
-    
-    return _newton_raphson_onesided(x0,f0,f1)
-end
-
-function _newton_raphson_powmeancone_nonpos(
-    dim::Int,
-    p::AbstractVector{T},
-    r::T,
-    α::AbstractVector{T}
-) where {T}
-
-    # init point x0 = 0
-    x0 = zero(T);
+    ϕ = one(T)
     @inbounds for i = 1:dim
-        ti = α[i]*p[i]
-        x0 += α[i]*logsafe(ti/(1+α[i]))
+        ϕ *= (p[i])^(α[i])
     end
-    x0 = exp(x0)
-
-
 
     # function for f(x) = 0
     function f0(x)
-        f0 = zero(T);
-        t = (r + sqrt(r*r + 4*x*x))/2;
+        f0 = -logsafe(ϕ);
         @inbounds for i = 1:dim
-            f0 += α[i]*logsafe(x/(α[i]*p[i]) + t/p[i])
+            f0 += α[i]*logsafe(x-r*α[i])
         end
 
         return f0
@@ -549,11 +511,8 @@ function _newton_raphson_powmeancone_nonpos(
     # first derivative
     function f1(x)
         f1 = zero(T);
-        t0 = sqrt(r*r + 4*x*x);
-        t1 = 2*inv(t0);
-        t2 = (t0 + r)/2;
         @inbounds for i = 1:dim
-            f1 += α[i]*((1 + α[i]*x*t1)/(x + α[i]*t2))
+            f1 += α[i]/(x-r*α[i])
         end
 
         return f1
@@ -564,7 +523,7 @@ end
 
 # update gradient and Hessian at dual z = (u,w)
 function _update_dual_grad_H(
-    K::PowerMeanCone{T},
+    K::DualPowerMeanCone{T},
     z::AbstractVector{T}
 ) where {T}
     
@@ -575,12 +534,12 @@ function _update_dual_grad_H(
 
     dim1 = K.data.d
 
-    # ϕ = ∏_{i ∈ dim1}(ui/αi)^(αi), ζ = φ + w
+    # ϕ = ∏_{i ∈ dim1}(ui)^(αi), ζ = φ - w
     ϕ = one(T)
     @inbounds for i = 1:dim1
-        ϕ *= (z[i]/α[i])^(α[i])
+        ϕ *= (z[i])^(α[i])
     end
-    ζ = ϕ + z[end]
+    ζ = ϕ - z[end]
     @assert ζ > zero(T)
 
     # compute the gradient at z
@@ -588,29 +547,124 @@ function _update_dual_grad_H(
     τ = K.data.q           # τ shares memory with K.q
     @inbounds for i = 1:dim1
         τ[i] = α[i]/(z[i]*ζ)
-        grad[i] = -τ[i]*ϕ - (1-α[i])/z[i]
+        grad[i] = -τ[i]*ϕ - inv(z[i])
     end
-    grad[end] = - inv(ζ) - inv(z[end])
+    grad[end] = inv(ζ)
 
     # compute Hessian information at z 
     p0 = ϕ
-    p1 = one(T)
+    p1 = -one(T)
     q0 = sqrt(ζ*ϕ)
 
     # compute the diagonal d1,d2
     @inbounds for i = 1:dim1
         d1[i] = -grad[i]/z[i]
     end   
-    K.data.d2 = 1/(z[end]^2) + 1
+    K.data.d2 = zero(T)
 
     # compute p, q, r where τ shares memory with q
     p[1:dim1] .= p0*τ
     p[end] = p1/ζ
 
     q .*= q0      #τ is abandoned
-    K.data.r[1] = one(T)
+    K.data.r[1] = zero(T)
 
     K.data.phi = ϕ 
     K.data.ζ = ζ
     # println("dual ζ is: ", ζ)
+end
+
+
+####################################
+# 3rd-order correction
+####################################
+#H^{-1}*x 
+function mul_Hinv!(
+    K::DualPowerMeanCone{T},
+    y::AbstractVector{T},
+    x::AbstractVector{T}
+) where {T}
+    α = K.α
+
+    z = K.data.z
+    dim1 = Clarabel.dim1(K)
+    u = @view z[1:dim1]
+
+    ϕ = K.data.phi
+    ζ = K.data.ζ
+
+    @views yu = y[1:dim1]
+    work = K.data.work_pp
+    @views worku = work[1:dim1]
+    @views xu = x[1:dim1]
+
+    @. worku = ζ/(ζ+α*ϕ)        #inv(k1)
+    k2 = mapreduce((i,j)->i*i*j,+,α,worku)
+    k3 = 1 - ϕ/ζ*k2
+
+    c1 = zero(T)
+    @inbounds for i = 1:dim1
+        c1 += xu[i]*α[i]*u[i]*worku[i]
+    end
+    c2 = ϕ/k3
+    c3 = c2*x[end]
+    c4 = c2*c1/ζ
+    @. yu = u*u*worku*xu + α*u*worku*c3 + c4*α*u*worku
+    y[end] = (ζ^2+k2/k3*ϕ^2)*x[end] + c2*c1
+
+    return nothing
+end
+
+function higher_correction_mosek!(
+    K::DualPowerMeanCone{T},
+    η::AbstractVector{T},
+    ds::AbstractVector{T},
+    dz::AbstractVector{T}
+) where {T}
+
+    #data.work = H^{-1}*ds
+    mul_Hinv!(K,K.data.work,ds)
+    # tensor product
+    α = K.α
+    dim1 = Clarabel.dim1(K)
+
+    du = @view K.data.work[1:dim1]
+    dw = K.data.work[end]
+    tu = @view dz[1:dim1]
+    tw = dz[end]
+
+    z = K.data.z
+    u = @view z[1:dim1]
+    w = z[end]
+    ϕ = K.data.phi
+    ζ = K.data.ζ
+    
+    #workspace
+    τ = @view K.data.work_pp[1:dim1]
+    @. τ = α/u/ζ
+    
+    #constants
+    c0 = dot(τ,du)
+    t0 = dot(τ,tu)
+    s0 = zero(T)
+    @inbounds for i in 1:dim1
+        s0 += τ[i]*du[i]*tu[i]/u[i]
+    end
+
+    #search direction
+    diru = @view  η[1:dim1]
+
+    #constant 
+    cu1 = -((2*w+ζ)*c0*t0 + s0)*w - 2*dw*tw/ζ^2 + (2*ϕ/ζ-1)*(tw*c0 + dw*t0)
+
+    @. diru  = ϕ*cu1*τ
+    for i in 1:dim1
+        diru[i] += -2*du[i]*tu[i]*(1/u[i]+τ[i]*ϕ)/(u[i]*u[i]) + τ[i]*ϕ/u[i]*((tw*du[i] + dw*tu[i])/ζ - w*(tu[i]*c0+du[i]*t0))
+    end
+
+    η[end] = 2/ζ^2*(dw*tw/ζ - ϕ*(c0*tw+t0*dw)) + ϕ*(2*ϕ/ζ-1)*c0*t0 + ϕ*s0/ζ
+
+    @. η /= -2
+    
+    return nothing
 end

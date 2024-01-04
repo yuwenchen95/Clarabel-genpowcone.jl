@@ -277,6 +277,8 @@ mutable struct GenPowerConeData{T}
     #additional scalar terms for rank-2 rep
     d2::T
 
+    #additional constant for initialization in the Newton-Raphson method
+    ψ::T
 
     #work vector length dim, e.g. for line searches
     work::Vector{T}
@@ -304,6 +306,7 @@ mutable struct GenPowerConeData{T}
         r    = zeros(T,dim2)
         d1   = zeros(T,dim1)
         d2   = zero(T)
+        ψ = inv(dot(α,α))
 
         work = zeros(T,dim)
         work_pb = zeros(T,dim)
@@ -313,7 +316,7 @@ mutable struct GenPowerConeData{T}
         ζ = zero(T)
         w2 = zero(T)
 
-        return new(grad,z,μ,p,q,r,d1,d2,work,work_pb,work_pp,phi,ζ,w2)
+        return new(grad,z,μ,p,q,r,d1,d2,ψ,work,work_pb,work_pp,phi,ζ,w2)
     end
 end
 
@@ -334,6 +337,25 @@ mutable struct GenPowerCone{T} <: AbstractCone{T}
 end
 
 GenPowerCone(args...) = GenPowerCone{DefaultFloat}(args...)
+
+# # ------------------------------------
+# # Dual Generalized Power Cone 
+# # ------------------------------------
+mutable struct DualGenPowerCone{T} <: AbstractCone{T}
+
+    α::Vector{T}            #vector of exponents.  length determines dim1
+    dim2::DefaultInt        #dimension of w
+    data::GenPowerConeData{T}
+
+    function DualGenPowerCone{T}(α::AbstractVector{T},dim2::DefaultInt) where {T}
+
+        data = GenPowerConeData{T}(α, dim2)
+
+        return new(α,dim2,data)
+    end
+end
+
+DualGenPowerCone(args...) = DualGenPowerCone{DefaultFloat}(args...)
 
 
 # # ------------------------------------
@@ -415,6 +437,29 @@ end
 
 PowerMeanCone(args...) = PowerMeanCone{DefaultFloat}(args...)
 
+
+# # ------------------------------------
+# # Dual Power Mean Cone 
+# # ------------------------------------
+
+# gradient and Hessian for the dual barrier function
+mutable struct DualPowerMeanCone{T} <: AbstractCone{T}
+
+    α::Vector{T}
+    dim::DefaultInt                #d + 1
+    data::PowerMeanConeData{T}
+
+    function DualPowerMeanCone{T}(α::Vector{T}) where {T}
+
+        data = PowerMeanConeData{T}(α)
+
+        return new(α,length(α)+1,data)
+    end
+end
+
+DualPowerMeanCone(args...) = DualPowerMeanCone{DefaultFloat}(args...)
+
+
 # # ------------------------------------
 # # Relative Entropy Cone (u,v,w) ∈ R^{1 × d × d}
 # # ------------------------------------
@@ -471,7 +516,9 @@ const ConeDict = Dict{DataType,Type}(
     ExponentialConeT => ExponentialCone,
           PowerConeT => PowerCone,
        GenPowerConeT => GenPowerCone,
+       DualGenPowerConeT => DualGenPowerCone,
        PowerMeanConeT => PowerMeanCone,
+       DualPowerMeanConeT => DualPowerMeanCone,
         EntropyConeT => EntropyCone,
     PSDTriangleConeT => PSDTriangleCone,
 )

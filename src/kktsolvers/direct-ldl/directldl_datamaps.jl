@@ -85,7 +85,7 @@ struct GenPowExpansionMap <: SparseExpansionMap
     r::Vector{Int}        #off diag dense columns r
     D::MVector{3, Int}    #diag D
 
-    function GenPowExpansionMap(cone::Union{GenPowerCone,PowerMeanCone})
+    function GenPowExpansionMap(cone::Union{GenPowerCone,DualGenPowerCone,PowerMeanCone,DualPowerMeanCone})
         p = Vector{Int}(undef,numel(cone))
         q = Vector{Int}(undef,dim1(cone))
         r = Vector{Int}(undef,dim2(cone))
@@ -96,10 +96,10 @@ end
 pdim(::GenPowExpansionMap) = 3
 nnz_vec(map::GenPowExpansionMap) = length(map.p) + length(map.q) + length(map.r)
 Dsigns(::GenPowExpansionMap) = (-1,-1,+1)
-expansion_map(cone::Union{GenPowerCone,PowerMeanCone}) = GenPowExpansionMap(cone)
+expansion_map(cone::Union{GenPowerCone,DualGenPowerCone,PowerMeanCone,DualPowerMeanCone}) = GenPowExpansionMap(cone)
 
 function _csc_colcount_sparsecone(
-    cone::Union{GenPowerCone,PowerMeanCone},
+    cone::Union{GenPowerCone,DualGenPowerCone,PowerMeanCone,DualPowerMeanCone},
     map::GenPowExpansionMap,
     K::SparseMatrixCSC,row::Int,col::Int,shape::Symbol
 )
@@ -122,7 +122,7 @@ function _csc_colcount_sparsecone(
 end
 
 function _csc_fill_sparsecone(
-    cone::Union{GenPowerCone{T},PowerMeanCone{T}},
+    cone::Union{GenPowerCone{T},DualGenPowerCone{T},PowerMeanCone{T},DualPowerMeanCone{T}},
     map::GenPowExpansionMap,
     K::SparseMatrixCSC{T},
     row::Int,col::Int,shape::Symbol
@@ -144,7 +144,7 @@ function _csc_fill_sparsecone(
 end 
 
 function _csc_update_sparsecone(
-    cone::Union{GenPowerCone{T},PowerMeanCone{T}},
+    cone::Union{GenPowerCone{T},DualGenPowerCone{T},PowerMeanCone{T},DualPowerMeanCone{T}},
     map::GenPowExpansionMap, 
     updateFcn, 
     scaleFcn

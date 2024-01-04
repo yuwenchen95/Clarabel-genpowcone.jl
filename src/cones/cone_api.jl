@@ -47,10 +47,32 @@ struct GenPowerConeT <: SupportedCone
     end
 end
 
+struct DualGenPowerConeT <: SupportedCone
+    α::Vector{DefaultFloat}
+    dim2::DefaultInt
+    function DualGenPowerConeT(α::Vector{DefaultFloat}, dim2::DefaultInt)
+
+        @assert all(α .> zero(DefaultFloat))
+        @assert isapprox(sum(α),one(DefaultFloat), atol=eps()*length(α)/2)
+
+        new(copy(α), dim2)
+    end
+end
 
 struct PowerMeanConeT <: SupportedCone
     α::Vector{DefaultFloat}
     function PowerMeanConeT(α::Vector{DefaultFloat})
+
+        @assert all(α .> zero(DefaultFloat))
+        @assert isapprox(sum(α),one(DefaultFloat), atol=eps()*length(α)/2)
+
+        new(copy(α))
+    end
+end
+
+struct DualPowerMeanConeT <: SupportedCone
+    α::Vector{DefaultFloat}
+    function DualPowerMeanConeT(α::Vector{DefaultFloat})
 
         @assert all(α .> zero(DefaultFloat))
         @assert isapprox(sum(α),one(DefaultFloat), atol=eps()*length(α)/2)
@@ -85,7 +107,11 @@ function nvars(cone:: SupportedCone)
         3
     elseif isa(cone, GenPowerConeT)
         length(cone.α) + cone.dim2
+    elseif isa(cone, DualGenPowerConeT)
+        length(cone.α) + cone.dim2
     elseif isa(cone, PowerMeanConeT)
+        length(cone.α) + 1
+    elseif isa(cone, DualPowerMeanConeT)
         length(cone.α) + 1
     else
         cone.dim
@@ -105,7 +131,11 @@ function make_cone(T::Type, coneT)
         cone = ConeDict[typeT]{T}(T(coneT.α))
     elseif typeT == GenPowerConeT
         cone = ConeDict[typeof(coneT)]{T}(T.(coneT.α),coneT.dim2)
+    elseif typeT == DualGenPowerConeT
+        cone = ConeDict[typeof(coneT)]{T}(T.(coneT.α),coneT.dim2)
     elseif typeT == PowerMeanConeT
+        cone = ConeDict[typeof(coneT)]{T}(T.(coneT.α))
+    elseif typeT == DualPowerMeanConeT
         cone = ConeDict[typeof(coneT)]{T}(T.(coneT.α))
     else
         cone = ConeDict[typeT]{T}(coneT.dim)
