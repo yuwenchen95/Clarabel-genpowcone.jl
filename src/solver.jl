@@ -256,8 +256,8 @@ function solve!(
 
             # #barrier 
             # barrier = variables_barrier(s.variables,s.step_lhs,zero(T),s.cones)
-            # @assert(barrier > -sqrt(eps(T)))
             # println("barrier is: ", barrier)
+            # @assert(barrier > -sqrt(eps(T)))
 
             # if (scaling == Dual && barrier > s.settings.low_barrier)
             #     #centering only, without the affine (predictor) step
@@ -343,28 +343,28 @@ function solve!(
             #--------------
             α = solver_get_step_length(s,:combined,scaling)
 
-            #YC: only take the centering step without the higher-order correction when the combined step size is too small
-            if (α < s.settings.min_switch_step_length)
-                _reset_step_lhs(s.step_lhs)
-                # println("only centering")
-                α = zero(T)
-                σ = s.settings.cratio
+            # #YC: only take the centering step without the higher-order correction when the combined step size is too small
+            # if (α < s.settings.min_switch_step_length)
+            #     _reset_step_lhs(s.step_lhs)
+            #     println("only centering")
+            #     α = zero(T)
+            #     σ = s.settings.cratio
 
-                variables_combined_step_rhs!(
-                    s.step_rhs, s.residuals,
-                    s.variables, s.cones,
-                    s.step_lhs, σ, μ, m
-                )
+            #     variables_combined_step_rhs!(
+            #         s.step_rhs, s.residuals,
+            #         s.variables, s.cones,
+            #         s.step_lhs, σ, μ, m
+            #     )
 
-                @timeit s.timers "kkt solve" begin
-                is_kkt_solve_success =
-                    kkt_solve!(
-                        s.kktsystem, s.step_lhs, s.step_rhs,
-                        s.data, s.variables, s.cones, :combined
-                    )
-                end
-                α = solver_get_step_length(s,:combined,scaling)
-            end
+            #     @timeit s.timers "kkt solve" begin
+            #     is_kkt_solve_success =
+            #         kkt_solve!(
+            #             s.kktsystem, s.step_lhs, s.step_rhs,
+            #             s.data, s.variables, s.cones, :combined
+            #         )
+            #     end
+            #     α = solver_get_step_length(s,:combined,scaling)
+            # end
 
             # check for undersized step and update strategy
             (action,scaling) = _strategy_checkpoint_small_step(s, α, scaling)
@@ -440,11 +440,11 @@ function solver_get_step_length(s::Solver{T},steptype::Symbol,scaling::ScalingSt
     if (!is_symmetric(s.cones) && steptype == :combined && scaling == Dual)
         αinit = α
 
-        if allows_primal_dual_scaling(s.cones)
-            α = solver_backtrack_step_to_barrier(s,αinit)
-        else
+        # if allows_primal_dual_scaling(s.cones)
+        #     α = solver_backtrack_step_to_barrier(s,αinit)
+        # else
             α = solver_backtrack_step_to_centrality(s,αinit)
-        end
+        # end
     end
     return α
 end
@@ -564,7 +564,7 @@ function _strategy_checkpoint_small_step(s::Solver{T}, α::T, scaling::ScalingSt
 
     if !is_symmetric(s.cones) &&
         scaling == PrimalDual::ScalingStrategy && α < s.settings.min_switch_step_length
-        println("switch scaling")
+        # println("switch scaling")
         return (Update::StrategyCheckpoint, Dual::ScalingStrategy)
 
     elseif α <= max(zero(T), s.settings.min_terminate_step_length)

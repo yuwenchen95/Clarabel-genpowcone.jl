@@ -40,6 +40,7 @@ function info_print_configuration(
     print_conedims_by_type(io, cones, DualGenPowerCone)
     print_conedims_by_type(io, cones, PowerMeanCone)
     print_conedims_by_type(io, cones, DualPowerMeanCone)
+    print_conedims_by_type(io, cones, EntropyCone)
     print_conedims_by_type(io, cones, PSDTriangleCone)
     print_settings(io, settings)
     @printf(io, "\n")

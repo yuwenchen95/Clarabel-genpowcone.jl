@@ -223,7 +223,8 @@ function check_neighbourhood(
     dz::AbstractVector{T},
     ds::AbstractVector{T},
     α::T,
-    μ::T
+    μ::T,
+    thr::T
 ) where {T}   
 
     work = similar(K.grad) 
@@ -242,7 +243,7 @@ function check_neighbourhood(
     μt = dot(gradz,grads)    
     neighbourhood = degree(K)/(μt*cur_μ)
     # println("neighbourhood is ", neighbourhood)
-    if (neighbourhood < 1e-6)
+    if (neighbourhood < thr)
         return false
     end
 

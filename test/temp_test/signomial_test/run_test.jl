@@ -1,8 +1,9 @@
 using JuMP
 include("JuMP.jl")
-# using Clarabel
-m = 10
-n = 40      #YC: fails for n = 40,50
+using Revise
+using Clarabel
+m = 40
+n = 3      #YC: fails for n = 40,50
 model = clarabel_build(SignomialMinJuMP{Float64}(m,n))
 set_optimizer_attribute(model,"up_barrier", 1.0)
 set_optimizer_attribute(model,"low_barrier", 0.5)
