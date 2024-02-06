@@ -22,7 +22,7 @@ A = sparse(1.0*I(n))
 gamma = norm(A * x) / sqrt(n)
 freq = ones(n) #+ rand(rng,n)
 normalize!(freq,1)
-
+coef = 1.0
 #######################################################################
 # YC: Benchmarking should be implemented separately if you want to 
 #     obtain the plot.
@@ -47,7 +47,7 @@ for i = 1:n-2
     @constraint(model, r[i] == q[i])
     @constraint(model, vcat(p[i+2],r[i],q[i+1]) in MOI.PowerCone(freq[i+2]/power))
 end
-@constraint(model, vcat(gamma, A * p) in MOI.NormInfinityCone(n + 1))
+@constraint(model, vcat(gamma, coef*A * p) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * p) in MOI.NormOneCone(n + 1))
 # MOI.set(model, MOI.Silent(), true)
 # set_optimizer_attribute(model,"MSK_IPAR_PRESOLVE_USE",false)
@@ -78,7 +78,7 @@ for i = 1:n-2
     @constraint(model, r[i] == q[i])
     @constraint(model, vcat(p[i+2],r[i],q[i+1]) in MOI.PowerCone(freq[i+2]/power))
 end
-@constraint(model, vcat(gamma, A * p) in MOI.NormInfinityCone(n + 1))
+@constraint(model, vcat(gamma, coef * A * p) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * p) in MOI.NormOneCone(n + 1))
 # MOI.set(model, MOI.Silent(), true)
 # set_optimizer_attribute(model,"MSK_IPAR_PRESOLVE_USE",false)
@@ -100,7 +100,7 @@ At = spdiagm(0 =>[freq; 1.0])
 # At = spdiagm(0 =>[freq; -1.0])
 # @constraint(model, At*vcat(x,t) in Clarabel.MOI.DualPowerMeanCone(freq))
 # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
-@constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
+@constraint(model, vcat(gamma, coef * A * x) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
 # MOI.set(model, MOI.Silent(), true)      #Disable printing information
 set_optimizer_attribute(model,"cratio",1.0)
@@ -155,7 +155,7 @@ model = Model(Hypatia.Optimizer)
 @objective(model, Max, t)
 @constraint(model, vcat(x,t) in Hypatia.GeneralizedPowerCone(freq,1,false))
 # @constraint(model, vcat(gamma, A * x) in MOI.SecondOrderCone(n + 1))
-@constraint(model, vcat(gamma, A * x) in MOI.NormInfinityCone(n + 1))
+@constraint(model, vcat(gamma, coef * A * x) in MOI.NormInfinityCone(n + 1))
 @constraint(model, vcat(sqrt(n) * gamma, A * x) in MOI.NormOneCone(n + 1))
 # MOI.set(model, MOI.Silent(), true)
 optimize!(model)

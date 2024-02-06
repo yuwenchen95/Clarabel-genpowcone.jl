@@ -17,6 +17,7 @@ solver = model.moi_backend.optimizer.model.optimizer.solver
 
 # using Hypatia
 # modelH = Model(Hypatia.Optimizer)
+# set_optimizer_attribute(modelH,"syssolver", Hypatia.Solvers.SymIndefSparseSystemSolver{Float64}())
 # modelH = build(SignomialMinJuMP{Float64}(m,n),modelH)
 # optimize!(modelH)
 

@@ -8,7 +8,7 @@ dist = Exponential(2.0)
 dist = BetaPrime(1.0,2.0) 
 
 # Generate random samples from the distribution
-n = 5  # Number of samples
+n = 1000  # Number of samples
 
 rng = Random.MersenneTwister(1)
 y = rand(rng,dist, n)
@@ -46,7 +46,7 @@ optimize!(model)
 xsol = value.(x)
 
 #Clarabel
-println("generalized power cones via Clarabel")
+# println("generalized power cones via Clarabel")
 model = Model(Clarabel.Optimizer)
 @variable(model, t)
 @variable(model, x[1:n])
@@ -60,9 +60,10 @@ At = spdiagm(0 =>[freq; 1.0])
 for i = 1:n-2
     @constraint(model, (x[i+1]-x[i])/(y[i+1]-y[i]) - (x[i+2]-x[i+1])/(y[i+2]-y[i+1])<= 0)
 end
-@constraint(model, x .>= 0)
+# @constraint(model, x .>= 0)
 set_optimizer_attribute(model,"equilibrate_enable",false)
 set_optimizer_attribute(model,"max_iter", 1)
+set_optimizer_attribute(model,"verbose", false)
 # set_optimizer_attribute(model,"barrier", -n-0.5)
 optimize!(model)
 
