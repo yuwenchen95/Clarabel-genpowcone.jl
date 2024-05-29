@@ -8,7 +8,7 @@ Argument | Default Value | Description
 ||
 __Main Algorithm Settings__||
 ||
-max\\_iter                              | 50        | maximum number of iterations
+max\\_iter                              | 200       | maximum number of iterations
 time\\_limit                            | Inf       | maximum run time (seconds)
 verbose                                 | true      | verbose printing
 max\\_step\\_fraction                   | 0.99      | maximum interior point step length
@@ -19,7 +19,7 @@ tol\\_gap\\_rel                         | 1e-8      | relative duality gap toler
 tol\\_feas                              | 1e-8      | feasibility check tolerance (primal and dual)
 tol\\_infeas\\_abs						| 1e-8		| absolute infeasibility tolerance (primal and dual)
 tol\\_infeas\\_rel						| 1e-8		| relative infeasibility tolerance (primal and dual)
-tol\\_ktratio                           | 1e-7      | κ/τ tolerance
+tol\\_ktratio                           | 1e-6      | κ/τ tolerance
 ||
 __Reduced Accuracy Settings__||
 reduced\\_tol\\_gap\\_abs               | 5e-5      | reduced absolute duality gap tolerance
@@ -30,7 +30,6 @@ reduced\\_tol\\_infeas_rel		        | 5e-5      | reduced relative infeasibility
 reduced\\_tol\\_ktratio                 | 1e-4      | reduced κ/τ tolerance
 ||
 __Data Equilibration Settings__||
-||
 equilibrate\\_enable                    | true      | enable data equilibration pre-scaling
 equilibrate\\_max\\_iter                | 10        | maximum equilibration scaling iterations
 equilibrate\\_min\\_scaling             | 1e-4      | minimum equilibration scaling allowed
@@ -39,25 +38,31 @@ equilibrate\\_max\\_scaling             | 1e+4      | maximum equilibration scal
 __Step Size Settings__||
 linesearch\\_backtrack\\_step           | 0.8       | linesearch backtracking
 min\\_switch\\_step\\_length            | 1e-1      | minimum step size allowed for asymmetric cones with PrimalDual scaling
-min\\_terminate\\_step\\_length         | 1e-4      | minimum step size allowed for symmetric cones && asymmetric cones with Dual scaling
+min\\_terminate\\_step\\_length         | 1e-4      | minimum step size allowed for symmetric cones & asymmetric cones with Dual scaling
 ||
 __Linear Solver Settings__||
-||
 direct\\_kkt\\_solver                   | true      | use a direct linear solver method (required true)
-direct\\_solve\\_method                 | :qdldl    | direct linear solver (:qdldl, :mkl or :cholmod)
+direct\\_solve\\_method                 | :qdldl    | direct linear solver (e.g. :qdldl, :mkl, :panua, :ma57, :cholmod, :faer)
 static\\_regularization\\_enable        | true      | enable KKT static regularization
-static\\_regularization\\_eps           | 1e-7      | KKT static regularization parameter
+static\\_regularization\\_eps           | 1e-8      | KKT static regularization parameter
 static\\_regularization\\_proportional  | eps(T)^2  | additional regularization parameter w.r.t. the maximum abs diagonal term
 dynamic\\_regularization\\_enable       | true      | enable KKT dynamic regularization
 dynamic\\_regularization\\_eps          | 1e-13     | KKT dynamic regularization threshold
 dynamic\\_regularization\\_delta        | 2e-7      | KKT dynamic regularization shift
-iterative\\_refinement\\_enable         | true      | KKT solve with iterative refinement
+iterative\\_refinement\\_enable         | true      | KKT direct solve with iterative refinement
 iterative\\_refinement\\_reltol         | 1e-12     | iterative refinement relative tolerance
 iterative\\_refinement\\_abstol         | 1e-12     | iterative refinement absolute tolerance
 iterative\\_refinement\\_max\\_iter     | 10        | iterative refinement maximum iterations
 iterative\\_refinement\\_stop\\_ratio   | 5.0       | iterative refinement stalling tolerance
-__Preprocessing Settings 
-presolve_enable                         | true      | enable presolve constraint reduction
+||
+__Preprocessing Settings__||
+presolve\\_enable                         | true      | enable presolve constraint reduction
+|| 
+__Chordal Decomposition Settings__||
+chordal\\_decomposition\\_enable            | true            | enable chordal decomposition
+chordal\\_decomposition\\_merge_method      | :clique_graph   | chordal decomposition merge method (:clique\\_graph, :parent\\_child or :none)
+chordal\\_decomposition\\_compact           | true            | assemble decomposed system in "compact" form
+chordal\\_decomposition\\_complete_dual     | false           | complete PSD dual variables after decomposition
 
 """
 Base.@kwdef mutable struct Settings{T <: AbstractFloat}
@@ -121,10 +126,13 @@ Base.@kwdef mutable struct Settings{T <: AbstractFloat}
     presolve_enable::Bool               = true
 
     #center ratio 
-    cratio::T                              = 1.0
-    up_barrier::T                          = 1.0
-    low_barrier::T                         = 0.5
     neighborhood::T                        = 1e-6
+    #chordal decomposition
+    chordal_decomposition_enable::Bool  = true
+    chordal_decomposition_merge_method::Symbol = :clique_graph
+    chordal_decomposition_compact::Bool = true
+    chordal_decomposition_complete_dual::Bool = true
+
 end
 
 Settings(args...) = Settings{DefaultFloat}(args...)
@@ -188,9 +196,9 @@ function Base.show(io::IO, settings::Clarabel.Settings{T}) where {T}
     end 
     println(io)
     # and the settings 
-    for row in 1:size(table,1)
+    for row in axes(table,1)
         @printf(io, " ")
-        for col in 1:size(table,2)
+        for col in axes(table,2)
             @printf(io, " %s ", table[row,col])
         end
         println(io)

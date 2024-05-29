@@ -4,7 +4,9 @@ module Clarabel
     using SparseArrays, LinearAlgebra, Printf, Requires
     const DefaultFloat = Float64
     const DefaultInt   = LinearAlgebra.BlasInt
-    const IdentityMatrix = UniformScaling{Bool}
+
+    # Rust-like Option type
+    const Option{T} = Union{Nothing,T} 
 
     #internal constraint RHS limits.  This let block 
     #hides the INFINITY field in the module and makes 
@@ -29,14 +31,15 @@ module Clarabel
     include("./cones/compositecone_type.jl")
 
     #core solver components
+    include("./abstract_types.jl")
     include("./settings.jl")
-    include("./conicvector.jl")
     include("./statuscodes.jl")
+    include("./chordal/include.jl")
+    include("./types.jl")  
     include("./presolver.jl")
-    include("./types.jl")
     include("./variables.jl")
     include("./residuals.jl")
-    include("./equilibration.jl")
+    include("./problemdata.jl")
     include("./info.jl")
     include("./solution.jl")
 
@@ -75,6 +78,9 @@ module Clarabel
     include("./utils/mathutils.jl")
     include("./utils/csc_assembly.jl")
 
+    #data updating
+    include("./data_updating.jl")
+
     #optional dependencies.  
     #NB: This __init__ function and its @require statements 
     #should be removed upon update of this package for use 
@@ -82,10 +88,13 @@ module Clarabel
     #dependencies will be natively supported 
     function __init__()
         @require Pardiso="46dd5b70-b6fb-5a00-ae2d-e8fea33afaf2" begin
-            include("./kktsolvers/direct-ldl/directldl_mklpardiso.jl")  
+            include("./kktsolvers/direct-ldl/directldl_pardiso.jl")  
+        end 
+        @require HSL="34c5aeac-e683-54a6-a0e9-6e0fdc586c50" begin
+            include("./kktsolvers/direct-ldl/directldl_hsl.jl")
         end 
     end
-
+ 
     #MathOptInterface for JuMP/Convex.jl
     module MOI  #extensions providing non-standard MOI constraint types
         include("./MOI_wrapper/MOI_extensions.jl")

@@ -224,9 +224,9 @@ At = SparseMatrixCSC(solver.data.A')
 n_dual = size(At,2)
 b = solver.data.b 
 q = solver.data.q
-len_linear = solver.cones.headidx[3]-1    #number of linear constraints
-len_entropy = solver.cones.headidx[4] - solver.cones.headidx[3]
-n_cones = length(solver.cones.headidx)
+len_linear = solver.cones.rng_cones[2][end]    #number of linear constraints
+len_entropy = solver.cones.rng_cones[3][end] - solver.cones.rng_cones[2][end]
+n_cones = length(solver.cones.rng_cones)
 
 model = Model(Clarabel.Optimizer)
 @variable(model, x[1:n_dual])
@@ -240,7 +240,7 @@ for i in 1:(n_cones-2)
     global start_idx += len_entropy
 end
 
-using StatProfilerHTML
+set_optimizer_attribute(model,"direct_solve_method",:mkl)
 set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
 set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
 set_optimizer_attribute(model,"tol_feas", 1e-7)
@@ -248,7 +248,7 @@ set_optimizer_attribute(model,"tol_ktratio", 1e-5)
 set_optimizer_attribute(model,"min_terminate_step_length", 1e-3)
 set_optimizer_attribute(model,"min_switch_step_length", 1e-3)
 set_optimizer_attribute(model,"max_iter", 500)
-@profilehtml optimize!(model)
+optimize!(model)
 solver = model.moi_backend.optimizer.model.optimizer.solver
 
 modelm = Model(Mosek.Optimizer)
@@ -266,5 +266,5 @@ set_optimizer_attribute(modelm,"MSK_DPAR_INTPNT_CO_TOL_REL_GAP",1e-7)
 # set_optimizer_attribute(modelH,"tol_rel_opt", 1e-7)
 # set_optimizer_attribute(modelH,"tol_abs_opt", 1e-7)
 # set_optimizer_attribute(modelH,"tol_inconsistent", 1e-4)
-# hypatia_reg_wasserstein_barycenter(modelm,train[rimg,rimg,:],nothing,1e-7)
-# optimize!(modelm)
+hypatia_reg_wasserstein_barycenter(modelm,train[rimg,rimg,:],nothing,1e-7)
+optimize!(modelm)

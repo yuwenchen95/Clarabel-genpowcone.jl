@@ -25,9 +25,9 @@ At = SparseMatrixCSC(solver.data.A')
 n_dual = size(At,2)
 b = solver.data.b 
 q = solver.data.q
-len_linear = solver.cones.headidx[3]-1    #number of linear constraints
-len_entropy = solver.cones.headidx[4] - solver.cones.headidx[3]
-n_cones = length(solver.cones.headidx)
+len_linear = solver.cones.rng_cones[2][end]    #number of linear constraints
+len_entropy = solver.cones.rng_cones[3][end] - solver.cones.rng_cones[2][end]
+n_cones = length(solver.cones.rng_cones)
 
 model = Model(Clarabel.Optimizer)
 @variable(model, x[1:n_dual])
