@@ -85,6 +85,10 @@ struct EntropyConeT <: SupportedCone
     dim::DefaultInt
 end
 
+struct DualEntropyConeT <: SupportedCone
+    dim::DefaultInt
+end
+
 struct ExponentialConeT <: SupportedCone
     #no fields, #dim = 3 always
 end

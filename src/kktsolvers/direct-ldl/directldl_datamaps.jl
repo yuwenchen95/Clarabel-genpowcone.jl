@@ -166,6 +166,73 @@ function _csc_update_sparsecone(
     
 end
 
+struct EntropyExpansionMap <: SparseExpansionMap
+    
+    p::Vector{Int}        #off diag dense columns p
+    D::MVector{1, Int}    #diag D
+
+    function EntropyExpansionMap(cone::DualEntropyCone)
+        p = Vector{Int}(undef,numel(cone))
+        D = MVector(0)
+        new(p,D)
+    end
+end
+pdim(::EntropyExpansionMap) = 1
+nnz_vec(map::EntropyExpansionMap) = length(map.p)
+Dsigns(::EntropyExpansionMap) = (1)
+expansion_map(cone::DualEntropyCone) = EntropyExpansionMap(cone)
+
+function _csc_colcount_sparsecone(
+    cone::DualEntropyCone,
+    map::EntropyExpansionMap,
+    K::SparseMatrixCSC,row::Int,col::Int,shape::Symbol
+)
+
+    nvars   = numel(cone)
+
+    if shape == :triu
+        _csc_colcount_colvec(K,nvars, row, col)    #p column
+    else #:tril
+        _csc_colcount_rowvec(K,nvars, col, row)    #p row
+    end
+    _csc_colcount_diag(K,col,pdim(map))
+    
+end
+
+function _csc_fill_sparsecone(
+    cone::DualEntropyCone{T},
+    map::EntropyExpansionMap,
+    K::SparseMatrixCSC{T},
+    row::Int,col::Int,shape::Symbol
+) where{T}
+
+    if shape == :triu
+        _csc_fill_colvec(K, map.p, row, col) #p 
+    else #:tril
+        _csc_fill_rowvec(K, map.p, col, row)        #p
+    end
+    _csc_fill_diag(K,map.D,col,pdim(map))
+
+end 
+
+function _csc_update_sparsecone(
+    cone::DualEntropyCone{T},
+    map::EntropyExpansionMap, 
+    updateFcn, 
+    scaleFcn
+) where {T}
+    
+    data  = cone
+    sqrtμ = sqrt(data.μ)
+
+    #off diagonal columns (or rows), distribute √μ to off-diagonal terms
+    updateFcn(map.p,data.p)
+    scaleFcn(map.p,-sqrtμ)
+
+    #normalize diagonal terms to 1/-1 in the extended rows/cols
+    updateFcn(map.D,[one(T)])
+    
+end
 
 struct LDLDataMap
 

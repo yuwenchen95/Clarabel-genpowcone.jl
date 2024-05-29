@@ -428,9 +428,10 @@ function _is_dual_feasible_entropycone(
             end
         end
 
+        return true
     end
     
-    return true
+    return false
 end
 
 # Compute the primal gradient of f(s) at s

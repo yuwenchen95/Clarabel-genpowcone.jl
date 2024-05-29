@@ -54,28 +54,29 @@ model = Model(Clarabel.Optimizer)
 @objective(model, Min, t)
 @constraint(model, sum(q) == 1)
 @constraint(model, p .== p_init)
-@constraint(model, vcat(t,p,q) in Clarabel.MOI.EntropyCone(dim))
+@constraint(model, vcat(t,p,q) in Clarabel.MOI.DualEntropyCone(dim))
 optimize!(model)
-@assert isapprox(opt_val,objective_value(model),atol = tol)
+solver = model.moi_backend.optimizer.model.optimizer.solver
+# @assert isapprox(opt_val,objective_value(model),atol = tol)
 
 
-#Result from three-dimensional exponential cones ECOS
-println("three-dimensional exponential cones via ECOS")
-model = Model(ECOS.Optimizer)
-@variable(model, p[1:d])
-@variable(model, q[1:d])
-@variable(model, r[1:d])
-@variable(model, t)
-@objective(model, Min, t)
-@constraint(model, sum(q) == 1)
-@constraint(model, p .== p_init)
-@constraint(model, -sum(r) <= t)
-for i = 1:d
-    @constraint(model, vcat(r[i],q[i],p[i]) in MOI.ExponentialCone())
-end
-# @constraint(model, vcat(t,p,q) in MOI.RelativeEntropyCone(dim))
-optimize!(model)
-@assert isapprox(opt_val,objective_value(model),atol = tol)
+# #Result from three-dimensional exponential cones ECOS
+# println("three-dimensional exponential cones via ECOS")
+# model = Model(ECOS.Optimizer)
+# @variable(model, p[1:d])
+# @variable(model, q[1:d])
+# @variable(model, r[1:d])
+# @variable(model, t)
+# @objective(model, Min, t)
+# @constraint(model, sum(q) == 1)
+# @constraint(model, p .== p_init)
+# @constraint(model, -sum(r) <= t)
+# for i = 1:d
+#     @constraint(model, vcat(r[i],q[i],p[i]) in MOI.ExponentialCone())
+# end
+# # @constraint(model, vcat(t,p,q) in MOI.RelativeEntropyCone(dim))
+# optimize!(model)
+# @assert isapprox(opt_val,objective_value(model),atol = tol)
 
 # #Result from Hypatia
 # using Hypatia

@@ -10,7 +10,9 @@ function _allocate_kkt_Hsblocks(type::Type{T}, cones) where{T <: Real}
         if Hs_is_diagonal(cone) 
             numelblock = nvars
         elseif isa(cone,Clarabel.EntropyCone)
-            numelblock = 2*nvars - 1 + cone.d
+            numelblock = 5*cone.d + 1
+        elseif isa(cone,Clarabel.DualEntropyCone)
+            numelblock = 3*cone.d + 1
         else #dense triangle
             numelblock = triangular_number(nvars) #must be Int
         end
@@ -94,6 +96,8 @@ function _kkt_assemble_colcounts(
             _csc_colcount_diag(K,row,blockdim)
         elseif isa(cone,Clarabel.EntropyCone)
             _csc_colcount_entropy(K,row,blockdim,shape)
+        elseif isa(cone,Clarabel.DualEntropyCone)
+            _csc_colcount_dualentropy(K,row,blockdim,shape)
         else
             _csc_colcount_dense_triangle(K,row,blockdim,shape)
         end
@@ -150,6 +154,8 @@ function _kkt_assemble_fill(
             _csc_fill_diag(K,map.Hsblocks[i],row,blockdim)
         elseif isa(cone,Clarabel.EntropyCone)
             _csc_fill_entropy(K,map.Hsblocks[i],row,blockdim,shape)
+        elseif isa(cone,Clarabel.DualEntropyCone)
+            _csc_fill_dualentropy(K,map.Hsblocks[i],row,blockdim,shape)
         else
             _csc_fill_dense_triangle(K,map.Hsblocks[i],row,blockdim,shape)
         end

@@ -73,3 +73,11 @@ end
 EntropyCone(args...) = EntropyCone{Float64}(args...)
 MathOptInterface.dimension(cone::EntropyCone) = (cone.dim)
 Base.copy(cone::EntropyCone{Float64}) = deepcopy(cone)
+
+struct DualEntropyCone{T<:Real} <: MathOptInterface.AbstractVectorSet
+    dim::Int
+end
+
+DualEntropyCone(args...) = DualEntropyCone{Float64}(args...)
+MathOptInterface.dimension(cone::DualEntropyCone) = (cone.dim)
+Base.copy(cone::DualEntropyCone{Float64}) = deepcopy(cone)

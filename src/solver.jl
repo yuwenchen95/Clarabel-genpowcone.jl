@@ -462,8 +462,8 @@ function solver_backtrack_step_to_barrier(
 
     for j = 1:50
         barrier = variables_barrier(s.variables,s.step_lhs,α,s.cones)
-        # println("barrier is: ", barrier)
-        if barrier < s.settings.up_barrier + s.info.add_barrier
+        # println("check barrier is: ", barrier)
+        if barrier < s.settings.up_barrier
             return α
         else
             if (α *= step) < α_min

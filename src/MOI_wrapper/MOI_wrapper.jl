@@ -22,7 +22,8 @@ const OptimizerSupportedMOICones{T} = Union{
     Clarabel.MOI.DualGenPowerCone{T},
     Clarabel.MOI.PowerMeanCone{T},
     Clarabel.MOI.DualPowerMeanCone{T},
-    Clarabel.MOI.EntropyCone{T}
+    Clarabel.MOI.EntropyCone{T},
+    Clarabel.MOI.DualEntropyCone{T}
 } where {T}
 
 #Optimizer will consolidate cones of these types if possible
@@ -41,6 +42,7 @@ const MOItoClarabelCones = Dict([
     Clarabel.MOI.PowerMeanCone => Clarabel.PowerMeanConeT,
     Clarabel.MOI.DualPowerMeanCone => Clarabel.DualPowerMeanConeT,
     Clarabel.MOI.EntropyCone => Clarabel.EntropyConeT,
+    Clarabel.MOI.DualEntropyCone => Clarabel.DualEntropyConeT,
     MOI.Scaled{MOI.PositiveSemidefiniteConeTriangle} => Clarabel.PSDTriangleConeT,
 ])
 
@@ -663,6 +665,11 @@ function push_constraint_set!(
     end
     if isa(s,Clarabel.MOI.EntropyCone)
         genpow_cone_type = MOItoClarabelCones[Clarabel.MOI.EntropyCone]
+        push!(cone_spec, genpow_cone_type(s.dim))
+        return nothing
+    end
+    if isa(s,Clarabel.MOI.DualEntropyCone)
+        genpow_cone_type = MOItoClarabelCones[Clarabel.MOI.DualEntropyCone]
         push!(cone_spec, genpow_cone_type(s.dim))
         return nothing
     end

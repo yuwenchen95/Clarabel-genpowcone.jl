@@ -504,6 +504,62 @@ end
 
 EntropyCone(args...) = EntropyCone{DefaultFloat}(args...)
 
+# # ------------------------------------
+# # Dual Relative Entropy Cone (u,v,w) ∈ R^{1 × d × d}
+# # ------------------------------------
+
+# gradient and Hessian for the dual barrier function
+mutable struct DualEntropyCone{T} <: AbstractCone{T}
+
+    grad::Vector{T}         #gradient of the dual barrier at z 
+    z::Vector{T}            #holds copy of z at scaling point
+    d::DefaultInt           #dimension of u,w parts
+    dim::DefaultInt                #2d+1
+    μ::T                    #central path parameter
+
+    #vectors for off-diagonal parts of H_s
+    p::Vector{T}            #low-rank p
+    offd::Vector{T}         #off-diagonal Hessian v,w
+    dd::Vector{T}            #Diagonal part
+    work::Vector{T}
+    #work vector exclusively for computing the primal barrier function.   
+    work_pb::Vector{T}
+    work_pp::Vector{T}
+
+    Hiuv::Vector{T}
+    Hiuw::Vector{T}
+    Hivw::Vector{T}
+    Hiww::Vector{T}
+    Hivv::Vector{T}
+
+    function DualEntropyCone{T}(dim::DefaultInt) where {T}
+        @assert dim > 1 
+        @assert isodd(dim)
+
+        d = (dim-1) >> 1
+        μ = one(T)
+
+        grad   = zeros(T,dim)
+        z      = zeros(T,dim)
+        p      = zeros(T,dim)
+        offd   = zeros(T,d)
+        dd      = zeros(T,dim)
+        work = similar(grad)
+        work_pb = similar(grad)
+        work_pp = similar(grad)
+
+        Hiuv = zeros(T,d)
+        Hiuw = zeros(T,d)
+        Hivw = zeros(T,d)
+        Hiww = zeros(T,d)
+        Hivv = zeros(T,d)
+
+        return new(grad,z,d,dim,μ,p,offd,dd,work,work_pb,work_pp,
+                Hiuv,Hiuw,Hivw,Hiww,Hivv)
+    end
+end
+
+DualEntropyCone(args...) = DualEntropyCone{DefaultFloat}(args...)
 """
     ConeDict
 A Dict that maps the user-facing SupportedCone types to
@@ -520,5 +576,6 @@ const ConeDict = Dict{DataType,Type}(
        PowerMeanConeT => PowerMeanCone,
        DualPowerMeanConeT => DualPowerMeanCone,
         EntropyConeT => EntropyCone,
+        DualEntropyConeT => DualEntropyCone,
     PSDTriangleConeT => PSDTriangleCone,
 )
