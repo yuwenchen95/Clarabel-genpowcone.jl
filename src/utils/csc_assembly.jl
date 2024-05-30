@@ -300,7 +300,26 @@ function _csc_fill_dualentropy(K,diag2toKKT,offset,blockdim,shape)
             index += 1
         end
     else #shape ==== :tril
-        error("No use for dual entropy cone")
+        for col in offset:(offset + blockdim - 1)
+            if col > offset && col < (offset + d + 1)
+                dest             = K.colptr[col]
+                K.rowval[dest]   = col    #for dd
+                K.nzval[dest]    = 0.  #structural zero
+                diag2toKKT[index] = dest
+                K.rowval[dest+1]   = col + d    #for offd
+                K.nzval[dest+1]    = 0.  #structural zero
+                diag2toKKT[index + 2*d] = dest + 1
+                K.colptr[col]   += 2  
+            else
+                dest                = K.colptr[col]
+                K.rowval[dest]      = col
+                K.nzval[dest]       = 0.  #structural zero
+                diag2toKKT[index]     = dest
+                K.colptr[col]      += 1
+            end
+
+            index += 1
+        end
     end
 end
 

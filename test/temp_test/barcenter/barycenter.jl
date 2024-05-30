@@ -240,7 +240,7 @@ for i in 1:(n_cones-2)
     global start_idx += len_entropy
 end
 
-set_optimizer_attribute(model,"direct_solve_method",:mkl)
+set_optimizer_attribute(model,"direct_solve_method",:qdldl)
 set_optimizer_attribute(model,"tol_gap_abs", 1e-7)
 set_optimizer_attribute(model,"tol_gap_rel", 1e-7)
 set_optimizer_attribute(model,"tol_feas", 1e-7)
