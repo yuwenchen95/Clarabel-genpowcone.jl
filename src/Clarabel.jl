@@ -3,7 +3,7 @@ module Clarabel
 
     using SparseArrays, LinearAlgebra, Printf, Requires
     const DefaultFloat = Float64
-    const DefaultInt   = LinearAlgebra.BlasInt
+    const DefaultInt   = Int64
 
     # Rust-like Option type
     const Option{T} = Union{Nothing,T} 
@@ -95,6 +95,9 @@ module Clarabel
         end 
     end
  
+    # JSON I/O
+    include("./json.jl")
+
     #MathOptInterface for JuMP/Convex.jl
     module MOI  #extensions providing non-standard MOI constraint types
         include("./MOI_wrapper/MOI_extensions.jl")

@@ -99,8 +99,7 @@ Base.@kwdef mutable struct Settings{T <: AbstractFloat}
     min_switch_step_length::T           = 1e-2   
     min_terminate_step_length::T        = 1e-4    
 
-    #the direct linear solver to use
-    #can be :qdldl or :mkl
+    #the direct linear solver package to use
     direct_kkt_solver::Bool             = true   #indirect not yet supported
     direct_solve_method::Symbol         = :qdldl
 
@@ -119,7 +118,7 @@ Base.@kwdef mutable struct Settings{T <: AbstractFloat}
     iterative_refinement_reltol::T      = 1e-13      
     iterative_refinement_abstol::T      = 1e-12 
 
-    iterative_refinement_max_iter::Int  = 10
+    iterative_refinement_max_iter::DefaultInt  = 10
     iterative_refinement_stop_ratio::T  = 5     
     
     #preprocessing 
