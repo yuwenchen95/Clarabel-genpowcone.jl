@@ -186,16 +186,16 @@ function combined_ds_shift!(
     σμ::T
 ) where {T}
 
-    η = K.work_pb
-    # #3rd order correction requires input variables z
-    if (all(step_z .== zero(T)))
-        η .= zero(T)
-    else
-        higher_correction_mosek!(K,η,step_s,step_z)  
-    end     
+    # η = K.work_pb
+    # # #3rd order correction requires input variables z
+    # if (all(step_z .== zero(T)))
+    #     η .= zero(T)
+    # else
+    #     higher_correction_mosek!(K,η,step_s,step_z)  
+    # end     
 
     @inbounds for i = 1:K.dim
-        shift[i] = K.grad[i]*σμ + η[i]
+        shift[i] = K.grad[i]*σμ #+ η[i]
     end
 
     return nothing
