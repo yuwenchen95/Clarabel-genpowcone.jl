@@ -8,11 +8,19 @@ $$
 \text{subject to} & Ax + s = b \\\\[1ex]
         & s \in \mathcal{K}
 \end{array}
-
 $$
 
-with decision variables$x \in \mathbb{R}^n$, $s \in \mathbb{R}^m$ and $q \in \mathbb{R}^n$, $A \in \mathbb{R}^{m \times n}$, and $b \in \mathbb{R}^m$.
-The convex set $\mathcal{K}$ is a composition of convex cones. Currently, we support the dual cones of nonsymmetric cones detailed in the paper:
+with decision variables
+$x \in \mathbb{R}^n$, 
+$s \in \mathbb{R}^m$ 
+and 
+$q \in \mathbb{R}^n$, 
+$A \in \mathbb{R}^{m \times n}$, 
+and 
+$b \in \mathbb{R}^m$.
+The convex set 
+$\mathcal{K}$
+ is a composition of convex cones. Currently, we support the dual cones of nonsymmetric cones detailed in the paper:
 
 ```
 @misc{chen2023efficient,
